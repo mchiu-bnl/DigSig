@@ -1,0 +1,13 @@
+Universe       = vanilla
+Notification   = Error
+Initialdir     = $ENV(PWD)
+Executable     = $ENV(PWD)/dt5742_toroot.cmd
+Arguments      = $(Process)
+Log            = $ENV(PWD)/log/toroot$(Process).log
+Output         = $ENV(PWD)/log/toroot$(Process).out
+Error          = $ENV(PWD)/log/toroot$(Process).err
+Notify_user    = $ENV(USER)@rcf.rhic.bnl.gov
+GetEnv         = True
++Experiment    = "phenix"
++Job_Type      = "cas"
+Queue 144
