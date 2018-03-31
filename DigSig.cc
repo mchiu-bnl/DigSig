@@ -457,6 +457,17 @@ void DigSig::LocMax(Double_t& x_at_max, Double_t& ymax)
   ymax = y[locmax];
 }
 
+void DigSig::LocMin(Double_t& x_at_max, Double_t& ymax)
+{
+  // Find index of maximum peak
+  Int_t n = gSubPulse->GetN();
+  Double_t* x = gSubPulse->GetX();
+  Double_t* y = gSubPulse->GetY();
+  int locmax = TMath::LocMin(n,y);
+  x_at_max = x[locmax];
+  ymax = y[locmax];
+}
+
 void DigSig::Print()
 {
   Double_t x, y;

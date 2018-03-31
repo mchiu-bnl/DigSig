@@ -69,8 +69,11 @@ public:
   /** Simple integral to get total charge, etc */
   Double_t Integral(const Double_t xmin, const Double_t xmax);
 
-  /** Simple integral to get total charge, etc */
+  /** The maximum value from all samples */
   void LocMax(Double_t& x_at_max, Double_t& ymax);
+
+  /** The minimum value from all samples (including negatives) */
+  void LocMin(Double_t& x_at_min, Double_t& ymin);
 
   /** Use template fit to get ampl and time */
   Int_t    FitTemplate();
