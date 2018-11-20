@@ -25,5 +25,7 @@ Procedure for working with any pulses
        digana.SetPed0FromFile(pedfile);
        digana.ReadTemplate(name);
    An example is digsig_calctimes.C
+   Note that you can also skip step 2 if you use a dCFD method,
+   by setting time_method = 0 in digsig_calctimes.C
 
 

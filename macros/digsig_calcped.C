@@ -9,10 +9,18 @@ const Int_t end_sample = 2;
 */
 
 // DRS4 studies
+/*
 const int NCH = 4;
 const int NSAMP = 1024;
 const Double_t begin_sample = 20.0;  // sample ranges in ns for pedestal
 const Double_t end_sample = 50.0;
+*/
+
+// CAENv1742
+const int NCH = 2;
+const int NSAMP = 1024;
+const Double_t begin_sample = 10.0;  // sample ranges in ns for pedestal
+const Double_t end_sample = 15.0;
 
 // BBC PMT with CAEN DT5742
 /*

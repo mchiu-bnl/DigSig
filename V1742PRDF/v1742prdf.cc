@@ -17,6 +17,7 @@ using namespace std;
 
 const int MAX_PACKETS = 4; // Maximum number of packets (ie, boards)
 const int MAX_DRS = 4;     // Maximum number of DRS4 per board
+const int MAX_CALCH = 9;   // Maximum number of ch per DRS4
 const int NCH = 2;         // number active channels
 const int NSAMPLES = 1024; // num samples in a waveform
 
@@ -32,8 +33,8 @@ Short_t f_spillevt;
 Float_t f_volt[NCH][NSAMPLES];
 Float_t f_time[NCH][NSAMPLES];
 
-Float_t ped_cell[MAX_PACKETS][MAX_DRS][9][1024]; // [board][drs][ch][cell]
-Float_t nsamp_cell[MAX_PACKETS][MAX_DRS][9][1024]; // [board][drs][ch][cell]
+Float_t ped_cell[MAX_PACKETS][MAX_DRS][MAX_CALCH][1024]; // [board][drs][ch][cell]
+Float_t nsamp_cell[MAX_PACKETS][MAX_DRS][MAX_CALCH][1024]; // [board][drs][ch][cell]
 Float_t time_cell[MAX_PACKETS][MAX_DRS][1024]; // [board][drs][cell]
 
 void LoadCorrections()
@@ -62,7 +63,7 @@ void LoadCorrections()
       while ( !infile.eof() )
       {
 
-        for (int ich=0; ich<9; ich++)
+        for (int ich=0; ich<MAX_CALCH; ich++)
         {
           // skip first two lines
           getline(infile, FullLine);
@@ -159,11 +160,31 @@ void LoadCorrections()
 
 }
 
-/*
-int SetChannelMap(const char *ch)
+int SetChannelMapFile(const char *chfname)
 {
+  if ( strlen(chfname) == 0 )
+  {
+    // Default is straight ordering
+    for (int ich=0; ich<NCH; ich++)
+    {
+      chmap[ich] = ich;
+    }
+  }
+  else
+  {
+    // get chmap fromfile
+    ifstream chmapfile(chfname);
+    int tempch;
+    int n = 0;
+    while ( chmapfile >> tempch )
+    {
+      cout << n << "\t" << tempch << endl;
+      chmap[n++] = tempch;
+    }
+  }
+
+  return 1;
 }
-*/
 
 int SaveFile()
 {
@@ -224,7 +245,7 @@ int pinit()
   return 0;
 }
 
-int process_event (Event * e)
+int process_event(Event * e)
 {
   Packet *p[MAX_PACKETS] = {0};
 
@@ -235,7 +256,7 @@ int process_event (Event * e)
     //cout << "Fount packet " << 2000+iboard << "\t" << p[iboard] << endl;
   }
 
-  if (p[0])
+  if ( p[0] )
   {
     f_evt = p[0]->iValue(0,"EVNR");
     if ( f_evt%1000 == 0 )
@@ -257,19 +278,31 @@ int process_event (Event * e)
     return 0;
   }
 
+  /*
+  // For debugging
+  int s1 = p[0]->iValue(100, 0);
+  int s2 = p[0]->iValue(100, 8);
+  cout << f_evt << "\t" << s1 << "\t" << s2 << endl;
+  */
+
   for ( int ich = 0; ich < NCH; ich++)
   {
     int feech = chmap[ich];
     int board = ich/32;
+    int drs = (chmap[ich]%32)/8;
     int channel = feech%8;
-    int drs = channel/8;
 
     //cout << "AAA " << board << "\t" << channel << endl;
     int trigcell = p[board]->iValue(drs,"INDEXCELL");
 
+    if ( f_evt == 1 )
+    {
+      cout << "ch " << feech << "\t" << board << "\t" << drs << "\t" << channel << endl;
+    }
+
     for ( int isamp = 0; isamp < 1024; isamp++)
     {
-      int s = p[board]->iValue(isamp, channel);
+      int s = p[board]->iValue(isamp, chmap[ich]%32);
 
       // pedestal correction
       int corr_sample = (trigcell+isamp)%1024;

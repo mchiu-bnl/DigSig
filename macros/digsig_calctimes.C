@@ -8,9 +8,15 @@ const int NSAMP = 31;
 TString template_fname = "TIMING16_TEMPLATE/sig_gen2";
 */
 
+//CAENv1742
+const int NCH = 2;
+const int NSAMP = 1024;
+
 //DRS4
+/*
 const int NCH = 4;
 const int NSAMP = 1024;
+*/
 //TString template_fname = "TEMPLATES/sig_gen0";
 TString template_fname = "TEMPLATES/sig_gen2";
 
@@ -75,6 +81,11 @@ int digsig_calctimes(const char *rootfname = "drs4.root")
 
   for (int ievt=0; ievt<nentries; ievt++)
   {
+    if ( ievt%1000 == 0 )
+    {
+      cout << "Event " << ievt << endl;
+    }
+
     digana.ProcessEvent(ievt);
 
     for (int ich=0; ich<NCH; ich++)

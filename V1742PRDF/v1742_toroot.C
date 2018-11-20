@@ -1,10 +1,12 @@
 
-void v1742_toroot()
+void v1742_toroot(const char *prdfname, const char *chmap = "")
 {
   gSystem->Load("libv1742prdf.so");
-  pfileopen("data/junk_00000023-0000.prdf");
+  SetChannelMapFile(chmap);
+  pfileopen(prdfname);
   prun(5000);
 
-  cleanup();
+  SaveFile();
+  //cleanup();
 }
 
