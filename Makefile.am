@@ -3,7 +3,7 @@ AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -g -Wall -Werror -Wextra -Wno-unused-parameter
 
-INCLUDES = -I$(includedir) -I$(ROOTSYS)/include 
+AM_CPPFLAGS = -I$(includedir) -I$(ROOTSYS)/include 
 
 lib_LTLIBRARIES = libdigsig.la   
 

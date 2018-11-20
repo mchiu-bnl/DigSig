@@ -255,6 +255,7 @@ int ReadSingleEventBinary()
     max_time[ich] = -999.;
 
     // get one line first 
+    /*
     size_t nread = fread(&g_record_len,sizeof(uint32_t),1,wavefile_fp[ich]);
     if ( nread != 1 )
     {
@@ -265,6 +266,7 @@ int ReadSingleEventBinary()
     fread(&g_channel,sizeof(uint32_t),1,wavefile_fp[ich]);
     fread(&g_event_num,sizeof(uint32_t),1,wavefile_fp[ich]);
     fread(&g_time_stamp,sizeof(uint32_t),1,wavefile_fp[ich]);
+    */
 
     if ( verbose>0 )
     {

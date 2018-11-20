@@ -35,8 +35,8 @@ int g_start_cell;  // starting cell of readout
 
 // text
 //const float DATA_TIMESTEP = 0.2;  // in nanoseconds
-const float DATA_TIMESTEP = 0.5;  // in nanoseconds
-//const float DATA_TIMESTEP = 1.0;  // in nanoseconds
+//const float DATA_TIMESTEP = 0.5;  // in nanoseconds
+const float DATA_TIMESTEP = 1.0;  // in nanoseconds
 const int   DIGI_STEPS = 4000;      // number of steps in template
 const float DIGI_START_TIME = -20.;
 const float DIGI_END_TIME = 20.;
@@ -44,8 +44,8 @@ const float DIGI_TIMESTEP = (DIGI_END_TIME - DIGI_START_TIME)/DIGI_STEPS;
 TGraph *digi_graph[MAXCH];
 float digi_pulse[MAXCH][DIGI_STEPS] = {{0.}};
 
-Double_t FitFcn(Double_t *x, Double_t *par);
-void set_fitpulse(const int ich);
+//Double_t FitFcn(Double_t *x, Double_t *par);
+//void set_fitpulse(const int ich);
 
 #endif  // __PSTOF_DT5742__
 

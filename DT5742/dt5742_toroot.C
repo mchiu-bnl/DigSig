@@ -12,13 +12,13 @@
 #include <TString.h>
 #include <TPad.h>
 #include <TCanvas.h>
-#include "dt5742.h"
+//#include "dt5742.h"
 
 int OpenWaveFiles(const int binorasc);
 int CloseWaveFiles(const int binorasc);
 int ReadSingleEventAscii();
 int ReadSingleEventBinary();
-void eventloop(const int nevents = 0, const int do_display=0,const int binorasc=0);
+void eventloop(int nevents, int do_display, int binorasc);
 
 
 TH1 *hadc[MAXCH];
@@ -71,14 +71,7 @@ Short_t  f_samp;
 Float_t  f_adc;
 Float_t  f_cadc;  // corrected adc
 
-
-void dt5742_toroot(const int nevents = 0, const int make_display=0, const int binorasc = 1)
-{
-  //gROOT->ProcessLine(".L dt5742.C+");
-  eventloop(nevents,make_display,binorasc);
-}
-
-void eventloop(const int nevents = 0, const int do_display=0,const int binorasc=0)
+void eventloop(int nevents, int do_display, int binorasc)
 {
   int verbose = 0;
 
@@ -272,5 +265,12 @@ void eventloop(const int nevents = 0, const int do_display=0,const int binorasc=
   if ( savefile!=0 ) savefile->Write();
   CloseWaveFiles(binorasc);
 
+}
+
+
+void dt5742_toroot(const int nevents = 0, const int make_display=0, const int binorasc = 1)
+{
+  //gROOT->ProcessLine(".L dt5742.C+");
+  eventloop(nevents,make_display,binorasc);
 }
 
