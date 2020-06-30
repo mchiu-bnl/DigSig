@@ -18,7 +18,10 @@ DigAna::DigAna(const int numch, const int nsamp) :
 
   for (int ich=0; ich<nch; ich++)
   {
+    cout << "Creating digsig " << ich << endl;
     digsig.push_back( DigSig(ich,nsamples) );
+
+    ch_skip.push_back( 0 ); // by default all ch's are good
   }
 
   f_evt = -1;
@@ -49,6 +52,8 @@ Stat_t DigAna::OpenRootFile(const char *fname)
 
   ttree = (TTree*)tfile->Get("t");
   ttree->SetBranchAddress("evt",&f_evt);
+  //ttree->SetBranchAddress("spillevt",&f_spillevt);
+  //ttree->SetBranchAddress("dtstamp",&f_dtstamp);
   TString label;
   for (int ich=0; ich<nch; ich++)
   {
@@ -93,11 +98,16 @@ int DigAna::SetPed0FromFile(const char *pedfname)
   cout << "Reading in Pedestals from " << pedfname << endl;
   while ( pedfile >> ch >> pedmean >> pedrms )
   {
-    if ( ch<0 || ch>nch )
+    if ( ch<0 )
     {
       cerr << __FILE__ << " " << __LINE__ << " ERROR, invalid ch: "
         << ch << endl;
-      return -2;
+      return ch;
+    }
+    else if ( ch>nch )
+    {
+      nped++;
+      continue;
     }
 
     // could also check that pedrms is reasonable
@@ -163,6 +173,24 @@ void DigAna::SetTimeOffset(const Double_t o)
   }
 }
 
+void DigAna::SkipAll()
+{
+  for (int ich=0; ich<nch; ich++)
+  {
+    ch_skip[ich] = 1;
+  }
+}
+
+void DigAna::EnableCh(const int ich)
+{
+  ch_skip[ich] = 0;
+}
+
+void DigAna::SkipCh(const int ich)
+{
+  ch_skip[ich] = 1;
+}
+
 int DigAna::ProcessEvent(const int entry)
 {
   ttree->GetEntry(entry);
@@ -182,6 +210,8 @@ int DigAna::ProcessEvent(const int entry)
 
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
+    if ( entry<2 ) cout << "DigSig::SetXY(), ch " << ich << endl;
     digsig[ich].SetXY(f_x[ich],f_y[ich],invert);
   }
 
@@ -225,11 +255,12 @@ void DigAna::FillFcnTemplate()
 
   for (int ievt=0; ievt<nentries; ievt++)
   {
-    cout << "event " << ievt << " / " << nentries << endl;
+    //cout << "event " << ievt << " / " << nentries << endl;
     ProcessEvent(ievt);
 
     for (int ich=0; ich<nch; ich++)
     {
+      if ( ch_skip[ich] == 1 ) continue;
       DigSig *sig = GetSig(ich);
       sig->FillFcnTemplate();
 
@@ -240,7 +271,7 @@ void DigAna::FillFcnTemplate()
   }
 
   delete[] time;
-  cout << "Exiting DigAna::FilLFcnTemplate" << endl;
+  //cout << "Exiting DigAna::FilLFcnTemplate" << endl;
 }
 
 void DigAna::MakeAndWriteTemplate(const char *savename)
@@ -272,7 +303,7 @@ void DigAna::ReadTemplate(const char *savedname)
 
   for (int ich=0; ich<nch; ich++)
   {
-    cout << "reading template " << ich << endl;
+    cout << "Reading Template " << ich << endl;
     digsig[ich].ReadTemplate( shapefile, sherrfile );
   }
 

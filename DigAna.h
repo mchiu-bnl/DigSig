@@ -3,6 +3,7 @@
 
 #include <TH1.h>
 #include <TGraphErrors.h>
+#include <stdint.h>
 #include "DigSig.h"
 
 class TFile;
@@ -22,6 +23,11 @@ public:
 
   /** Invert all the pulses */
   void Invert() { invert = -1; }
+
+  /** Set Channels to Skip */
+  void SkipAll();
+  void EnableCh(const int ich);
+  void SkipCh(const int ich);
 
   /** Read pedestals from file */
   int  SetPed0FromFile(const char * pedfname);
@@ -43,17 +49,24 @@ public:
   void MakeAndWriteTemplate(const char *savename);
   void ReadTemplate(const char *basename);
 
+  int32_t get_evt() { return f_evt; }
+  int32_t get_spillevt() { return f_spillevt; }
+  int32_t get_dtstamp() { return f_dtstamp; }
+
 private:
   int nch;
   int nsamples;
   int invert;
 
+  std::vector<int> ch_skip; // channels to skip
   std::vector<DigSig> digsig;
 
   Stat_t nentries;
   TFile *tfile;
   TTree *ttree;
   Int_t f_evt;
+  Int_t f_spillevt;
+  Int_t f_dtstamp;
   Float_t f_x[64][1024];  // time or sample
   Float_t f_y[64][1024];  // voltage or adc
 

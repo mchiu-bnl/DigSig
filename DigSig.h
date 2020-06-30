@@ -70,10 +70,10 @@ public:
   Double_t Integral(const Double_t xmin, const Double_t xmax);
 
   /** The maximum value from all samples */
-  void LocMax(Double_t& x_at_max, Double_t& ymax);
+  void LocMax(Double_t& x_at_max, Double_t& ymax, Double_t minxrange = 0., Double_t maxxrange = 0.);
 
   /** The minimum value from all samples (including negatives) */
-  void LocMin(Double_t& x_at_min, Double_t& ymin);
+  void LocMin(Double_t& x_at_min, Double_t& ymin, Double_t minxrange = 0., Double_t maxxrange = 0.);
 
   /** Use template fit to get ampl and time */
   Int_t    FitTemplate();

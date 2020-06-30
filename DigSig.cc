@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <limits>
 
 using namespace std;
 
@@ -37,10 +38,12 @@ ch(chnum), nsamples(nsamp)
   name = "hsubpulse"; name += ch;
   hSubPulse = new TH1F(name,name,nsamples,-0.5,nsamples-0.5);
 
-  gRawPulse = new TGraphErrors(nsamples);
+  //gRawPulse = new TGraphErrors(nsamples);
+  gRawPulse = new TGraphErrors();
   name = "grawpulse"; name += ch;
   gRawPulse->SetName(name);
-  gSubPulse = new TGraphErrors(nsamples);
+  //gSubPulse = new TGraphErrors(nsamples);
+  gSubPulse = new TGraphErrors();
   name = "gsubpulse"; name += ch;
   gSubPulse->SetName(name);
 
@@ -174,8 +177,7 @@ void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
 {
   hRawPulse->Reset();
   hSubPulse->Reset();
-  //cout << nsamples << endl;
- 
+  //cout << "nsamples " << nsamples << endl;
   //cout << "use_ped0 " << use_ped0 << "\t" << ped0 << endl;
 
   for (int isamp=0; isamp<nsamples; isamp++)
@@ -446,26 +448,68 @@ Double_t DigSig::Integral(const Double_t xmin, const Double_t xmax)
   return f_integral;
 }
 
-void DigSig::LocMax(Double_t& x_at_max, Double_t& ymax)
+void DigSig::LocMax(Double_t& x_at_max, Double_t& ymax, Double_t xminrange, Double_t xmaxrange)
 {
   // Find index of maximum peak
   Int_t n = gSubPulse->GetN();
   Double_t* x = gSubPulse->GetX();
   Double_t* y = gSubPulse->GetY();
-  int locmax = TMath::LocMax(n,y);
-  x_at_max = x[locmax];
-  ymax = y[locmax];
+
+  // if flipped or equal, we search the whole range
+  if ( xmaxrange <= xminrange )
+  {
+    xminrange = -DBL_MAX;
+    xmaxrange = DBL_MAX;
+  }
+
+  ymax = -DBL_MAX;
+
+  for (int i=0; i<n; i++)
+  {
+    // Skip if out of range
+    if ( x[i] < xminrange ) continue;
+    if ( x[i] > xmaxrange ) break;
+
+    if ( y[i] > ymax )
+    {
+      ymax = y[i];
+      x_at_max = x[i];
+    }
+  }
+
 }
 
-void DigSig::LocMin(Double_t& x_at_max, Double_t& ymax)
+void DigSig::LocMin(Double_t& x_at_max, Double_t& ymin, Double_t xminrange, Double_t xmaxrange)
 {
   // Find index of maximum peak
   Int_t n = gSubPulse->GetN();
   Double_t* x = gSubPulse->GetX();
   Double_t* y = gSubPulse->GetY();
-  int locmax = TMath::LocMin(n,y);
-  x_at_max = x[locmax];
-  ymax = y[locmax];
+
+  // if flipped or equal, we search the whole range
+  if ( xmaxrange <= xminrange )
+  {
+    xminrange = -DBL_MAX;
+    xmaxrange = DBL_MAX;
+  }
+
+  ymin = DBL_MAX;
+
+  for (int i=0; i<n; i++)
+  {
+    // Skip if out of range
+    if ( x[i] < xminrange ) continue;
+    if ( x[i] > xmaxrange ) break;
+
+    if ( y[i] < ymin )
+    {
+      ymin = y[i];
+      x_at_max = x[i];
+    }
+  }
+
+  // old way of getting locmax
+  //int locmax = TMath::LocMin(n,y);
 }
 
 void DigSig::Print()
@@ -487,6 +531,12 @@ void DigSig::PadUpdate()
   cout << ch << " ? ";
   TString junk;
   cin >> junk;
+
+  if (junk[0] == 'w' || junk[0] == 's')
+  {
+    TString name = "ch"; name += ch; name += ".png";
+    gPad->SaveAs( name );
+  }
 }
 
 Double_t DigSig::TemplateFcn(Double_t *x, Double_t *par)
@@ -598,6 +648,15 @@ int DigSig::FitTemplate()
   //if ( verbose>10 ) cout << "CH is " << ch << "\t" << fit_shape << endl;
   */
   
+  // Check if channel is empty
+  if ( gSubPulse->GetN() == 0 )
+  {
+    f_ampl = -9999.;
+    f_time = -9999.;
+    //cout << "gSubPulse empty" << endl;
+    return 1;
+  }
+
   // Get x-position of maximum
   Double_t x_at_max, ymax;
   LocMax(x_at_max, ymax);
@@ -606,8 +665,8 @@ int DigSig::FitTemplate()
 
   //template_fcn->SetParLimits(1,-5.,4.);
   template_fcn->SetRange(template_min_xrange,template_max_xrange);
-  gSubPulse->Fit(template_fcn,"RNQ");
-  //gSubPulse->Fit(template_fcn,"R");
+  if ( verbose==0 ) gSubPulse->Fit(template_fcn,"RNQ");
+  else              gSubPulse->Fit(template_fcn,"R");
 
   // Get fit parameters
   f_ampl = template_fcn->GetParameter(0);
@@ -770,7 +829,7 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
     Double_t ncounts = hprojy->Integral();
     if ( ncounts < 10. )
     {
-      cout << "ERROR, " << ch << "\t" << ibin << "\tToo few entries " << hprojy->Integral() << endl;
+      //cout << "ERROR, " << ch << "\t" << ibin << "\tToo few entries " << hprojy->Integral() << endl;
       fitarg += "WLL";
     }
     else if ( ncounts<100. )
@@ -785,9 +844,9 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
     //gaus->SetParameters(peak,mean,0.01);
     gaus->SetParameters(peak,mean,rms);
 
-    hprojy->Fit(gaus,fitarg);
+    if ( ncounts>=10 ) hprojy->Fit(gaus,fitarg);
 
-    // Uncomment to see the fits
+    // See the fits
     if ( verbose )
     {
       hprojy->Draw();
@@ -834,17 +893,10 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
 void DigSig::FillFcnTemplate()
 {
   int verbose = 0;
-  verbose = 100;
+  //verbose = 100;
 
-  if ( ch==0 || ch==2 || ch==3 )
-  {
   FitTemplate();
-  }
-  else
-  {
-    f_ampl = 1.;
-    f_time = 100.;
-  }
+
   if ( f_ampl<template_min_good_amplitude || f_ampl>template_max_good_amplitude ) return; 
 
   // Get Time and Max of spline to rescale
@@ -880,55 +932,58 @@ int DigSig::ReadTemplate(ifstream& shapefile, ifstream& sherrfile)
   Double_t temp_begintime;
   Double_t temp_endtime;
 
+  template_y.clear();
+  template_yrms.clear();
+
   // Template 
   while ( shapefile >> temp_ch >> temp_nsamples >> temp_begintime >> temp_endtime )
+  {
+    if ( verbose ) cout << "shape " << temp_ch << "\t" <<  temp_nsamples << "\t" <<  temp_begintime << "\t" <<  temp_endtime << endl;
+    if ( temp_ch != ch )
     {
-      if ( verbose ) cout << "shape " << temp_ch << "\t" <<  temp_nsamples << "\t" <<  temp_begintime << "\t" <<  temp_endtime << endl;
-      if ( temp_ch != ch )
-        {
-          cerr << "ERROR in shape: ch is " << temp_ch << "but should be " << ch << endl;
-          return -1;
-        }
-
-      Double_t temp_val;
-      for (int isamp=0; isamp<temp_nsamples; isamp++)
-        {
-          shapefile >> temp_val;
-          template_y[isamp] = temp_val;
-          if ( verbose )
-          {
-            cout << temp_val << " ";
-            if ( isamp%10==9 ) cout << endl;
-          }
-        }
-      if ( verbose ) cout << endl;
-      break;
+      cerr << "ERROR in shape: ch is " << temp_ch << "but should be " << ch << endl;
+      return -1;
     }
+
+    Double_t temp_val;
+    for (int isamp=0; isamp<temp_nsamples; isamp++)
+    {
+      shapefile >> temp_val;
+      template_y.push_back( temp_val );
+      if ( verbose )
+      {
+        cout << template_y[isamp] << " ";
+        if ( isamp%10==9 ) cout << endl;
+      }
+    }
+    if ( verbose ) cout << endl;
+    break;
+  }
 
   // Now get the errors
   while ( sherrfile >> temp_ch >> temp_nsamples >> temp_begintime >> temp_endtime )
+  {
+    if ( verbose ) cout << "sherr " << temp_ch << "\t" <<  temp_nsamples << "\t" <<  temp_begintime << "\t" <<  temp_endtime << endl;
+    if ( temp_ch != ch )
     {
-      if ( verbose ) cout << "sherr " << temp_ch << "\t" <<  temp_nsamples << "\t" <<  temp_begintime << "\t" <<  temp_endtime << endl;
-      if ( temp_ch != ch )
-        {
-          cerr << "ERROR in sherr: ch is " << temp_ch << " but should be " << ch << endl;
-          return -1;
-        }
-
-      Double_t temp_val;
-      for (int isamp=0; isamp<temp_nsamples; isamp++)
-        {
-          sherrfile >> temp_val;
-          template_yrms[isamp] = temp_val;
-          if ( verbose )
-          {
-            cout << temp_val << " ";
-            if ( isamp%10==9 ) cout << endl;
-          }
-        }
-      if ( verbose ) cout << endl;
-      break;
+      cerr << "ERROR in sherr: ch is " << temp_ch << " but should be " << ch << endl;
+      return -1;
     }
+
+    Double_t temp_val;
+    for (int isamp=0; isamp<temp_nsamples; isamp++)
+    {
+      sherrfile >> temp_val;
+      template_yrms.push_back( temp_val );
+      if ( verbose )
+      {
+        cout << template_yrms[isamp] << " ";
+        if ( isamp%10==9 ) cout << endl;
+      }
+    }
+    if ( verbose ) cout << endl;
+    break;
+  }
 
   TString name = "template_fcn"; name += ch;
   template_fcn = new TF1(name,this,&DigSig::TemplateFcn,0,nsamples,2,"DigSig","TemplateFcn");
