@@ -32,6 +32,7 @@ int OpenWaveFiles(const int binorasc)
     {
       name = "TR_0_0.txt";
       wavefile[maxch].open( name.Data() );
+      //cout << "Opening trigger file TR_0_0.txt" << endl;
     }
     else
     {
@@ -102,7 +103,7 @@ int ReadSingleEventAscii()
   string FullLine;
   string junk1, junk2, junk3;
   istringstream line;
-  g_record_len = 0;  // number of samples
+  g_record_len = 1024;  // number of samples
   g_board_id = 0;    // board id
   g_channel = 0;     // channel
   g_event_num = -1;  // event number (starting from 0!)
@@ -111,7 +112,7 @@ int ReadSingleEventAscii()
   g_dc_offset = -1;  // DC offset
   g_start_cell = -1; // starting cell of readout
 
-  for (int ich=0; ich<MAXCH; ich++)
+  for (unsigned int ich=0; ich<MAXCH; ich++)
     {
       max_ampl[ich] = 0;
       min_ampl[ich] = 5000;
@@ -124,6 +125,7 @@ int ReadSingleEventAscii()
       getline(wavefile[ich], FullLine);
       if ( wavefile[ich].eof() ) return 0;
       if ( wavefile[ich].bad() ) return 0;
+      if ( ! wavefile[ich].good() ) return 0;
 
       //cout << "zzz " << FullLine << endl;
 
@@ -154,9 +156,21 @@ int ReadSingleEventAscii()
           getline(wavefile[ich],FullLine);
           line.clear();
           line.str( FullLine.c_str() );
-          line >> junk1 >> g_channel;
-          //cout << junk1 << "\t" << g_channel << endl;
-          if ( g_channel != ich )
+          line >> junk1 >> junk2;
+          if ( junk2 == "TR_0_0" )
+            {
+              g_channel = 17;
+            }
+          else if ( junk2 == "TR_0_1" )
+            {
+              g_channel = 18;
+            }
+          else
+            {
+              g_channel = atoi(junk2.c_str());
+            }
+          // note, there is a bug in the wavedump where the TR_0_0.txt file reports it is ch 8.
+          if ( g_channel != ich && ich != 16 )
             {
               cout << "ERROR, g_channel and ich are " << g_channel << " " << ich << endl;
             }
@@ -190,39 +204,39 @@ int ReadSingleEventAscii()
           //cout << "Starting cell " << g_start_cell << endl;
         }
       else
-        {
-          line.clear();
-          line.str( FullLine.c_str() );
-          line >> adc[ich][0];
-          //cout << adc[ich][0];
-          start_samp = 1;
-        }
+      {
+        line.clear();
+        line.str( FullLine.c_str() );
+        line >> adc[ich][0];
+        //cout << adc[ich][0] << endl;
+        start_samp = 0;
+      }
 
       //trace[ich]->Reset();
-      for (int isamp=start_samp; isamp<g_record_len; isamp++)
+      for (uint32_t isamp=start_samp; isamp<g_record_len; isamp++)
+      {
+        getline(wavefile[ich],FullLine);
+        line.clear();
+        line.str( FullLine.c_str() );
+        line >> adc[ich][isamp];
+        //if (isamp==NSAMPLES-1) cout << "\t" << adc[ich][isamp] << endl;
+        float time = isamp*DATA_TIMESTEP; // DATA_TIMESTEP is in ns
+        trace[ich]->SetPoint(isamp,time,adc[ich][isamp]);
+        trace[ich]->SetPointError(isamp,0.,1.0);  // should change the error
+
+        if ( max_ampl[ich] < adc[ich][isamp] )
         {
-          getline(wavefile[ich],FullLine);
-          line.clear();
-          line.str( FullLine.c_str() );
-          line >> adc[ich][isamp];
-          //if (isamp==NSAMPLES-1) cout << "\t" << adc[ich][isamp] << endl;
-          float time = isamp*DATA_TIMESTEP; // DATA_TIMESTEP is in ns
-          trace[ich]->SetPoint(isamp,time,adc[ich][isamp]);
-          trace[ich]->SetPointError(isamp,0.,1.0);  // should change the error
-          
-          if ( max_ampl[ich] < adc[ich][isamp] )
-            {
-              max_ampl[ich] = adc[ich][isamp];
-              max_samp[ich] = isamp;
-              max_time[ich] = time;
-            }
-          if ( min_ampl[ich] > adc[ich][isamp] )
-            {
-              min_ampl[ich] = adc[ich][isamp];
-              min_samp[ich] = isamp;
-              min_time[ich] = time;
-            }
+          max_ampl[ich] = adc[ich][isamp];
+          max_samp[ich] = isamp;
+          max_time[ich] = time;
         }
+        if ( min_ampl[ich] > adc[ich][isamp] )
+        {
+          min_ampl[ich] = adc[ich][isamp];
+          min_samp[ich] = isamp;
+          min_time[ich] = time;
+        }
+      }
     }
 
   return 1;
@@ -231,11 +245,11 @@ int ReadSingleEventAscii()
 
 int ReadSingleEventBinary()
 {
-//  string FullLine;
-//  string junk1, junk2, junk3;
-//  istringstream line;
+  //  string FullLine;
+  //  string junk1, junk2, junk3;
+  //  istringstream line;
   const int verbose = 0;
-  
+
   g_record_len = 0;  // number of samples
   g_board_id = 0;    // board id
   g_channel = 0;     // channel
@@ -255,7 +269,6 @@ int ReadSingleEventBinary()
     max_time[ich] = -999.;
 
     // get one line first 
-    /*
     size_t nread = fread(&g_record_len,sizeof(uint32_t),1,wavefile_fp[ich]);
     if ( nread != 1 )
     {
@@ -266,7 +279,6 @@ int ReadSingleEventBinary()
     fread(&g_channel,sizeof(uint32_t),1,wavefile_fp[ich]);
     fread(&g_event_num,sizeof(uint32_t),1,wavefile_fp[ich]);
     fread(&g_time_stamp,sizeof(uint32_t),1,wavefile_fp[ich]);
-    */
 
     if ( verbose>0 )
     {
@@ -280,18 +292,18 @@ int ReadSingleEventBinary()
     }
 
     /*
-    if ( g_channel != ich%8 )
-    {
-      cout << "ERROR, " << g_channel << " != " << ich << endl;
-    }
-    */
+       if ( g_channel != ich%8 )
+       {
+       cout << "ERROR, " << g_channel << " != " << ich << endl;
+       }
+       */
 
     /*
-    if ( ich==16 )
-    {
-      cout << "16 16 16" << endl;
-    }
-    */
+       if ( ich==16 )
+       {
+       cout << "16 16 16" << endl;
+       }
+       */
     //trace[ich]->Reset();
     for (int isamp=0; isamp<1024; isamp++)
     {
@@ -305,12 +317,12 @@ int ReadSingleEventBinary()
       trace[ich]->SetPoint(isamp,time,adc[ich][isamp]);
       trace[ich]->SetPointError(isamp,0.,1.0);  // should change the error
 
-/*
-if ( ich==16 )
-{
-cout << isamp << "\t" << time << "\t" << adc[ich][isamp] << endl;
-}
-*/
+      /*
+         if ( ich==16 )
+         {
+         cout << isamp << "\t" << time << "\t" << adc[ich][isamp] << endl;
+         }
+         */
 
       if ( max_ampl[ich] < adc[ich][isamp] )
       {

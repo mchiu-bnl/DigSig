@@ -8,12 +8,14 @@
 using namespace std;
 
 DigAna::DigAna(const int numch, const int nsamp) :
+  nch(numch),
+  nsamples(nsamp),
   tfile(0)
 {
   TString name;
 
-  nch = numch;
-  nsamples = nsamp;
+  //nch = numch;
+  //nsamples = nsamp;
   invert = 1;
 
   for (int ich=0; ich<nch; ich++)
@@ -37,12 +39,13 @@ DigAna::~DigAna()
   //if ( tfile!=0 ) tfile->Close();
 }
 
-// Root TTree formate is the kind we used for DRS4
+// Root TTree format is the kind we used for DRS4
 Stat_t DigAna::OpenRootFile(const char *fname)
 {
   // Restore original directory after we are done
   TDirectory *orig_dir = gDirectory;
 
+  cout << "DigAna: Opening " << fname << endl;
   tfile = new TFile(fname,"READ");
   if ( tfile==0 )
   {
@@ -104,7 +107,7 @@ int DigAna::SetPed0FromFile(const char *pedfname)
         << ch << endl;
       return ch;
     }
-    else if ( ch>nch )
+    else if ( ch_skip[ch]==1 || ch >= nch )
     {
       nped++;
       continue;
@@ -123,6 +126,7 @@ void DigAna::SetEventPed0Range(const Int_t minsamp, const Int_t maxsamp)
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetEventPed0Range(minsamp,maxsamp);
   }
 }
@@ -131,6 +135,7 @@ void DigAna::SetEventPed0Range(const Double_t xmin, const Double_t xmax)
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetEventPed0Range(xmin,xmax);
   }
 }
@@ -140,6 +145,7 @@ void DigAna::CalcIntegralAroundPeak(const Double_t leftlimit, const Double_t rig
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     Double_t xpeak; // x value at peak
     Double_t ypeak; // peak y
     digsig[ich].LocMax(xpeak, ypeak); 
@@ -153,6 +159,7 @@ void DigAna::SetTemplateMinMaxGoodADC(const Double_t min, const Double_t max)
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetTemplateMinMaxGoodADC(min,max);
   }
 }
@@ -161,6 +168,7 @@ void DigAna::SetTemplateMinMaxFitRange(const Double_t min, const Double_t max)
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetTemplateMinMaxFitRange(min,max);
   }
 }
@@ -169,6 +177,7 @@ void DigAna::SetTimeOffset(const Double_t o)
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetTimeOffset( o );
   }
 }
@@ -205,13 +214,19 @@ int DigAna::ProcessEvent(const int entry)
       cout << f_x[ich][isamp] << " ";
     }
     cout << endl;
+    cout << ich << ":\t";
+    for (int isamp=0; isamp<nsamples; isamp++)
+    {
+      cout << f_y[ich][isamp] << " ";
+    }
+    cout << endl;
   }
   */
 
   for (int ich=0; ich<nch; ich++)
   {
     if ( ch_skip[ich] == 1 ) continue;
-    if ( entry<2 ) cout << "DigSig::SetXY(), ch " << ich << endl;
+    if ( entry<1 ) cout << "DigSig::SetXY(), ch " << ich << endl;
     digsig[ich].SetXY(f_x[ich],f_y[ich],invert);
   }
 
@@ -222,6 +237,7 @@ void  DigAna::SetTemplateSize(const Int_t nptsx, const Int_t nptsy, const Double
 {
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetTemplateSize(nptsx,nptsy,begt,endt);
   }
 }
@@ -239,6 +255,7 @@ void DigAna::FillSplineTemplate()
     for (int ich=0; ich<nch; ich++)
     {
       //cout << "ch " << ich << "xxx" << endl;
+      if ( ch_skip[ich] == 1 ) continue;
       DigSig *sig = GetSig(ich);
       sig->FillSplineTemplate();
     }
@@ -283,6 +300,7 @@ void DigAna::MakeAndWriteTemplate(const char *savename)
 
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     DigSig *sig = GetSig(ich);
     //cout << ich << "\t" << sig->GetPed0() << endl;
     sig->MakeAndWriteTemplate(template_shapefile,template_sherrfile);

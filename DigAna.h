@@ -31,7 +31,7 @@ public:
 
   /** Read pedestals from file */
   int  SetPed0FromFile(const char * pedfname);
-  /** Fill hists to determine ped0 */
+  /** Fill hists to determine ped0, using [sampmin,sampmax] (inclusive) */
   void FillPed0(const Int_t sampmin = 0, const Int_t sampmax = 2);
   void FillPed0(const Double_t xmin, const Double_t xmax);
   /** Set to use event-by-event ped */
@@ -67,8 +67,8 @@ private:
   Int_t f_evt;
   Int_t f_spillevt;
   Int_t f_dtstamp;
-  Float_t f_x[64][1024];  // time or sample
-  Float_t f_y[64][1024];  // voltage or adc
+  Float_t f_x[128][1024];  // time or sample
+  Float_t f_y[128][1024];  // voltage or adc
 
   TH1 *hdTime;
 

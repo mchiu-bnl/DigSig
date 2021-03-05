@@ -5,6 +5,7 @@
 //
 
 #include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -22,6 +23,7 @@ using namespace std;
 const int NSAMPLES=1024;
 
 typedef struct {
+   char ver_header[4]; // 'T' 'I' 'M' 'E'
    char time_header[4]; // 'T' 'I' 'M' 'E'
    char bn[2];          // 'B' '#'
    unsigned short board_number;
@@ -33,7 +35,7 @@ typedef struct {
 } TCHEADER;
 
 typedef struct {
-   char event_header[4];
+   char event_header[4];  // eg, 'E' 'H' 'D' 'R'
    unsigned int ev_serial_number;
    unsigned short year;
    unsigned short month;
@@ -50,7 +52,8 @@ typedef struct {
 } EHEADER;
 
 typedef struct {
-   char channel[4];
+   char channel[4];     // eg, 'C' '0' '0' '1'
+   unsigned int scaler;
    unsigned short data[NSAMPLES];
 } CHANNEL;
 
@@ -64,7 +67,7 @@ Float_t invert[N_CHN] = { 1.0, 1.0, 1.0, 1.0 };
 
 // do_display = whether to display graphs or not
 
-int ana_drs4(const char *fname = "test.dat", const int do_display = 0)
+int drs4_toroot(const char *fname = "test.dat", const int do_display = 0)
 {
    int ch, i, j, fh, ndt;
    double threshold, t1, t2, dt, sumdt, sumdt2;
@@ -127,10 +130,12 @@ int ana_drs4(const char *fname = "test.dat", const int do_display = 0)
    Int_t f_evt;
    Int_t f_spill;
    Int_t f_spillevt;
+   UShort_t f_cell;  // trigger cell
    TTree *rec = new TTree("t","DRS4");
    rec->Branch("evt", &f_evt,"evt/I");  
-   rec->Branch("spill", &f_spill,"spill/S");  
-   rec->Branch("spillevt", &f_spillevt,"spillevt/S");  
+   rec->Branch("spill", &f_spill,"spill/I");  
+   rec->Branch("spillevt", &f_spillevt,"spillevt/I");  
+   rec->Branch("cell", &f_cell,"cell/s");  
    rec->Branch("t0", &time[0]   ,"t0[1024]/F");
    rec->Branch("t1", &time[1]   ,"t1[1024]/F");
    rec->Branch("t2", &time[2]   ,"t2[1024]/F");
@@ -161,11 +166,7 @@ int ana_drs4(const char *fname = "test.dat", const int do_display = 0)
       i = (int)read(fh, &eh, sizeof(eh));
 
       f_evt = nevt+1;
-      // check for valid event header
-      if (memcmp(eh.event_header, "EHDR", 4) != 0) {
-         printf("Invalid event header (probably number of saved channels not equal %d)\n", N_CHN);
-         return 0;
-      }
+      f_cell = eh.trigger_cell;
 
       if (do_check)
       {
@@ -173,7 +174,13 @@ int ana_drs4(const char *fname = "test.dat", const int do_display = 0)
         cout << "range\t" << eh.range << endl;
         cout << "board\t" << eh.board_number << endl;
         cout << "trigcell\t" << eh.trigger_cell << endl;
- 
+      }
+
+      // check for valid event header
+      if (memcmp(eh.event_header, "EHDR", 4) != 0) {
+         printf("Invalid event header (probably number of saved channels not equal %d)\n", N_CHN);
+
+         return 0;
       }
 
       //cout << "Range = " << eh.range << endl;
@@ -293,6 +300,7 @@ int ana_drs4(const char *fname = "test.dat", const int do_display = 0)
       }
 
       nevents++;
+      //if (nevents>1000) break;
       if ( nhit==4 )
       {
         //cout << "found hit=4" << endl;

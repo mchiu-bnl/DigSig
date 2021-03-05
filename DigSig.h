@@ -66,6 +66,9 @@ public:
   /** digital CFD, threshold is in fraction of amplitude */
   Double_t dCFD(const Double_t fraction_threshold);
  
+  /** MBD method to get time, max_samp is the sample to use */
+  Double_t MBD(const Int_t max_samp);
+ 
   /** Simple integral to get total charge, etc */
   Double_t Integral(const Double_t xmin, const Double_t xmax);
 
@@ -102,8 +105,9 @@ private:
   int nsamples;
 
   /** fit values*/
-  Double_t f_ampl;  /** from fit of spline or template */
-  Double_t f_time;  /** from fit of spline or template */
+  // should make an array for the different methods
+  Double_t f_ampl;  /** best guess (from fit of spline or template, or max adc) */
+  Double_t f_time;  /** best guess (from fit of spline or template, or max adc) */
 
   Double_t f_time_offset; /** time offset used in fit */
   
@@ -126,6 +130,9 @@ private:
   Int_t    maxped0samp;       //! max sample for event-by-event ped, inclusive
   Double_t minped0x;          //! min x for event-by-event ped, inclusive
   Double_t maxped0x;          //! max x for event-by-event ped, inclusive
+
+  /** for time calibration */
+  Double_t time_calib;
 
   /** For pulse template extraction */
   TH2     *h2Template;

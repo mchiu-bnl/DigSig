@@ -25,13 +25,14 @@ DigSig::DigSig()
 */
 
 DigSig::DigSig(const int chnum, const int nsamp) :
-ch(chnum), nsamples(nsamp)
+ch(chnum),
+nsamples(nsamp)
 {
   //cout << "In DigSig::DigSig(" << ch << "," << nsamples << ")" << endl;
   TString name;
 
-  ch = chnum;
-  nsamples = nsamp;
+//  ch = chnum;
+//  nsamples = nsamp;
 
   name = "hrawpulse"; name += ch;
   hRawPulse = new TH1F(name,name,nsamples,-0.5,nsamples-0.5);
@@ -77,6 +78,9 @@ ch(chnum), nsamples(nsamp)
   hAmpl = new TH1F(name,name,17100,-100,17000);
   name = "hTime"; name += ch;
   hTime = new TH1F(name,name,3100,0,31);
+
+  f_ampl = 0;
+  f_time = 0;
 
   template_fcn = 0;
 }
@@ -142,6 +146,8 @@ void  DigSig::SetTemplateMinMaxFitRange(const Double_t min, const Double_t max)
 void DigSig::SetY(const Float_t *y, const int invert)
 {
   hpulse->Reset();
+  f_ampl = -9999.;
+  f_time = -9999.;
 
   for (int isamp=0; isamp<nsamples; isamp++)
   {
@@ -177,10 +183,13 @@ void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
 {
   hRawPulse->Reset();
   hSubPulse->Reset();
+  f_ampl = -9999.;
+  f_time = -9999.;
+
   //cout << "nsamples " << nsamples << endl;
   //cout << "use_ped0 " << use_ped0 << "\t" << ped0 << endl;
 
-  for (int isamp=0; isamp<nsamples; isamp++)
+  for( int isamp=0; isamp<nsamples; isamp++ )
   {
     //cout << isamp << "\t" << x[isamp] << "\t" << y[isamp] << endl;
     hRawPulse->SetBinContent( isamp+1, y[isamp] );
@@ -263,6 +272,7 @@ void DigSig::FillPed0(const Int_t sampmin, const Int_t sampmax)
   for (int isamp=sampmin; isamp<=sampmax; isamp++)
   {
     gRawPulse->GetPoint(isamp,x,y);
+    //gRawPulse->Print("all");
     hPed0->Fill( y );
 
     ped0stats->Push( y );
@@ -400,6 +410,7 @@ Double_t DigSig::dCFD(const Double_t fraction_threshold)
 
   // Get max amplitude
   Double_t ymax = TMath::MaxElement(n,y);
+  if ( f_ampl == -9999. ) f_ampl = ymax;
 
   Double_t threshold = fraction_threshold * ymax; // get fraction of amplitude
   //cout << "threshold = " << threshold << "\tymax = " << ymax <<endl;
@@ -424,6 +435,22 @@ Double_t DigSig::dCFD(const Double_t fraction_threshold)
   Double_t dt1 = y[sample] - threshold;
 
   Double_t t0 = x[sample] - dt1*(dx/dy);
+
+  return t0;
+}
+
+Double_t DigSig::MBD(const Int_t max_samp)
+{
+  // Get the amplitude of the sample number to get time
+  Double_t *y = gSubPulse->GetY();
+
+  // SHOULD INCLUDE TIME CALIBRATION HERE
+  Double_t t0 = y[max_samp];
+
+  // Get max amplitude, and set it if it hasn't already been set
+  int n = gSubPulse->GetN();
+  Double_t ymax = TMath::MaxElement(n,y);
+  if ( f_ampl == -9999. ) f_ampl = ymax;
 
   return t0;
 }
@@ -704,8 +731,6 @@ int DigSig::FitTemplate()
 
   return 1;
 }
-
-
 
 int DigSig::FillSplineTemplate()
 {

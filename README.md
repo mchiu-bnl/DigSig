@@ -29,3 +29,5 @@ Procedure for working with any pulses
    by setting time_method = 0 in digsig_calctimes.C
 
 
+Note that we usually set the pulses to be positive-going, since that is what DigSig assumes.
+

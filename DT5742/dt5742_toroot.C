@@ -12,13 +12,13 @@
 #include <TString.h>
 #include <TPad.h>
 #include <TCanvas.h>
-//#include "dt5742.h"
+#include "dt5742.h"
 
 int OpenWaveFiles(const int binorasc);
 int CloseWaveFiles(const int binorasc);
 int ReadSingleEventAscii();
 int ReadSingleEventBinary();
-void eventloop(int nevents, int do_display, int binorasc);
+void eventloop(const int nevents = 0, const int do_display=0,const int binorasc=0);
 
 
 TH1 *hadc[MAXCH];
@@ -27,11 +27,11 @@ TProfile *hprof_adc[MAXCH]; // there seems to be a dependence of pedestal on sam
                             // after correcting , we get RMS = 2.0 ADC -> 1.8 ADC
 
 const int NCH = 17; // 16 channels in DT5742
-Double_t invert[NCH] = {  1., 1., 1., 1.,
-                          1., 1., 1., 1.,
-                          1., 1., 1., 1.,
-//                          1., 1., 1., 1. };
-                          1., 1., 1., 1., 1. };
+
+// Whether to invert channel or not
+//Int_t invert[NCH] = { 0 };
+Int_t invert[NCH] = {  1, 1, 1, 1, 1, 1, 1, 1,
+                       1, 1, 1, 1, 1, 1, 1, 1, 1 };
 
 // Channel to canvas map
 //int ch2canvas[] = { 1, 3, 2, 4, 5, 6, -1, -1, 7, 8, 9, 10, 11, 12, -1, -1 };
@@ -51,12 +51,15 @@ int ch2canvas[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 };
 //int ch2out[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int ch2out[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
 
+const double CAEN_ADC_GAIN = 3.44e-4;   // CAEN ADC to volts
+
 TTree *t;
 Int_t    f_evt;
-UInt_t    f_tstamp;
-Short_t  f_spill;
-Short_t  f_spillevt;
-Short_t  f_ch[NCH];    // Channel Number
+Int_t    f_spill;
+Int_t    f_spillevt;
+Int_t    f_tstamp;
+Int_t    f_dtstamp;    // tstamp Diff to Prev Event
+Int_t    f_ch[NCH];    // Channel Number
 Float_t  f_ampl[NCH];  // Amplitude
 Float_t  f_q[NCH];     // Charge
 Float_t  f_t0[NCH];    // Time-Zero
@@ -64,22 +67,30 @@ Float_t  f_t0a[NCH];    // Different Time-Zero
 Float_t  f_t0b[NCH];    // Time-Zero
 Float_t  f_t0c[NCH];    // Time-Zero
 Float_t  f_t0d[NCH];    // Time-Zero
-Float_t  f_time[NCH][NSAMPLES];  // waveform time
+Float_t  f_time[NCH][NSAMPLES];  // waveform timedt5742_toroot
 Float_t  f_volt[NCH][NSAMPLES];  // waveform voltage
 
 Short_t  f_samp;
 Float_t  f_adc;
 Float_t  f_cadc;  // corrected adc
 
-void eventloop(int nevents, int do_display, int binorasc)
+
+// binryorasc: 0=ascii, 1=binary
+void dt5742_toroot(const int nevts = 0, const int make_display=0, const int binryorasc = 0)
+{
+  //gROOT->ProcessLine(".L dt5742.C+");
+  eventloop(nevts,make_display,binryorasc);
+}
+
+void eventloop(const int nevents, const int do_display,const int binorasc)
 {
   int verbose = 0;
 
   // gain from ADC to mV, in original CAEN channel
-  float gain[NCH];
+  double gain[NCH];
   for (int ich=0; ich<NCH; ich++)
   { 
-    gain[ich] = 3.44e-4;
+    gain[ich] = CAEN_ADC_GAIN;
     //cout << ich << "\t" << gain[ich] << endl;
   }
 
@@ -108,9 +119,10 @@ void eventloop(int nevents, int do_display, int binorasc)
     }
     t = new TTree("t","DT5742 data");
     t->Branch("evt",&f_evt,"evt/I");
-    t->Branch("tstamp",&f_tstamp,"tstamp/i");
-    t->Branch("spill",&f_spill,"spill/S");
-    t->Branch("spillevt",&f_spillevt,"spillevt/S");
+    t->Branch("spill",&f_spill,"spill/I");
+    t->Branch("spillevt",&f_spillevt,"spillevt/I");
+    t->Branch("tstamp",&f_tstamp,"tstamp/I");
+    t->Branch("dtstamp",&f_dtstamp,"dtstamp/I");
 
     for (int ich=0; ich<NCH; ich++)
     {
@@ -149,18 +161,25 @@ void eventloop(int nevents, int do_display, int binorasc)
   }
   */
 
-  UInt_t prev_tstamp = 0;
+  Int_t prev_tstamp = 0;
   f_spill = 1;
+  f_spillevt = 0;
 
   for (int ievt=0; ievt<nevents || nevents==0; ievt++)
   {
     if ( ievt%100 == 0 ) cout << ievt << endl;
     int status = -1;
-    if (binorasc==0) ReadSingleEventAscii();
+    if (binorasc==0) status = ReadSingleEventAscii();
     else             status = ReadSingleEventBinary();
-    if ( status==0 ) break; // end of file
+
+    if ( status==0 )
+    {
+      cout << "At end of file" << endl;
+      break; // end of file
+    }
 
     f_evt = ievt+1;
+    f_spillevt++;
 /*
     f_evt = g_event_num + 1;
     if ( f_evt != (ievt+1) )
@@ -172,15 +191,16 @@ void eventloop(int nevents, int do_display, int binorasc)
 */
 
     f_tstamp = g_time_stamp;
+    f_dtstamp = f_tstamp - prev_tstamp;
     //cout << "Event " << f_evt << "\t" << g_event_num << "\t" << g_time_stamp << "\t" << g_time_stamp-prev_tstamp << endl;
 
     // check for end of spill
     if ( ievt>0 )
     {
-      UInt_t dt = 0;
+      Int_t dt = 0;
       if ( f_tstamp < prev_tstamp ) // had a rollover
       {
-        dt = f_tstamp - (prev_tstamp-2147483647);
+
       }
       else
       {
@@ -192,6 +212,8 @@ void eventloop(int nevents, int do_display, int binorasc)
         f_spill++;
         cout << "new spill at " << f_evt << endl;
         cout << "Event " << f_evt << "\t" << g_event_num << "\t" << g_time_stamp << "\t" << g_time_stamp-prev_tstamp << endl;
+
+        f_spillevt = 1;
       }
     }
 
@@ -213,7 +235,11 @@ void eventloop(int nevents, int do_display, int binorasc)
 
         //cout << ich << "\t" << isamp  << "\t" << x << "\t" << y << endl;
         f_time[finalch][isamp] = (Float_t)x;
-        f_volt[finalch][isamp] = (Float_t)invert[ich]*y;
+        f_volt[finalch][isamp] = (Float_t)y;
+        if ( invert[ich] == 1 )
+        {
+          f_volt[finalch][isamp] = 4095.0 - f_volt[finalch][isamp];
+        }
       }
 
     }
@@ -244,7 +270,7 @@ void eventloop(int nevents, int do_display, int binorasc)
 
         /*
         string junk;
-        cin >> junk;
+        cin >> junk;hAmpl1
         */
       }
     }
@@ -265,12 +291,5 @@ void eventloop(int nevents, int do_display, int binorasc)
   if ( savefile!=0 ) savefile->Write();
   CloseWaveFiles(binorasc);
 
-}
-
-
-void dt5742_toroot(const int nevents = 0, const int make_display=0, const int binorasc = 1)
-{
-  //gROOT->ProcessLine(".L dt5742.C+");
-  eventloop(nevents,make_display,binorasc);
 }
 
