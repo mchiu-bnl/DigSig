@@ -36,7 +36,7 @@ Float_t f_samp[NSAMPLES];
 
 void read_mbd(const char *fname = "test_odd.dat")
 {
-  int verbose = 0;
+  int verbose = 0;  // sets level of screen output
 
   ifstream configfile("digsig.cfg");
   if ( configfile.is_open() )
@@ -84,6 +84,7 @@ void read_mbd(const char *fname = "test_odd.dat")
   h_pars->Fill(3., NADC);
   h_pars->Fill(4., NCH);
 
+  // Start Processing Chi's dat file (event loop over data)
   unsigned int marker;
   unsigned int header;
   unsigned int trailer;
@@ -164,7 +165,7 @@ void read_mbd(const char *fname = "test_odd.dat")
       if ( junk[0] == 'q' ) break;
     }
 
-  }
+  } // while loop over Chi's dat file
 
   cout << "Done!" << endl;
   datfile.close();
