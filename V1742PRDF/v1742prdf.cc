@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cstring>
 #include <pmonitor/pmonitor.h>
+#include "caen_calib.h"
 #include "v1742prdf.h"
 
 #include <TFile.h>
@@ -15,10 +16,13 @@ int init_done = 0;
 
 using namespace std;
 
-const int MAX_PACKETS = 4; // Maximum number of packets (ie, boards)
+const int MAX_PACKETS = 8; // Maximum number of packets (ie, boards)
 const int MAX_DRS = 4;     // Maximum number of DRS4 per board
 const int MAX_CALCH = 9;   // Maximum number of ch per DRS4
-const int NCH = 2;         // number active channels
+const int NCHPERBOARD = 34; // Number of channels in one V1742 (32 + 2 Trig)
+
+const int NBOARDS = 8;
+const int NCH = NBOARDS*NCHPERBOARD;      // number active channels
 const int NSAMPLES = 1024; // num samples in a waveform
 
 int chmap[NCH];
@@ -33,131 +37,48 @@ Short_t f_spillevt;
 Float_t f_volt[NCH][NSAMPLES];
 Float_t f_time[NCH][NSAMPLES];
 
-Float_t ped_cell[MAX_PACKETS][MAX_DRS][MAX_CALCH][1024]; // [board][drs][ch][cell]
-Float_t nsamp_cell[MAX_PACKETS][MAX_DRS][MAX_CALCH][1024]; // [board][drs][ch][cell]
-Float_t time_cell[MAX_PACKETS][MAX_DRS][1024]; // [board][drs][cell]
+CAEN_Calib *caen_calib[MAX_PACKETS];
+
+
+/*
+const char *caen_calibfname[MAX_PACKETS] = {
+  "caen_calibration/calib_0081_5G.dat",
+  "caen_calibration/calib_0087_5G.dat"
+};
+*/
+
+/*
+const char *caen_calibfname[MAX_PACKETS] = {
+  "caen_calibration/calib_12064_5G.dat",
+  "caen_calibration/calib_0106_5G.dat",
+  "caen_calibration/calib_10906_5G.dat",
+  "caen_calibration/calib_12067_5G.dat",
+  "caen_calibration/calib_0081_5G.dat",
+  "caen_calibration/calib_0097_5G.dat",
+  "caen_calibration/calib_0120_5G.dat",
+  "caen_calibration/calib_0087_5G.dat"
+};
+*/
+
+
+int SaveFile();
 
 void LoadCorrections()
 {
-  string FullLine;
+  ifstream infile("caen.list");
+  int serial_no = 0;
 
-  ifstream infile;
 
-  TString caldir = "Corrections/";
-  TString calfname;
-
+  char caen_calibfname[1024];
   for (int iboard=0; iboard<MAX_PACKETS; iboard++)
   {
-    for (int idrs=0; idrs<MAX_DRS; idrs++)
-    {
+    infile >> serial_no;
+    sprintf(caen_calibfname,"caen_calibration/calib_%04d_5G.dat",serial_no);
+    //cout << "Loading " << caen_calibfname << endl;
+    caen_calib[iboard] = new CAEN_Calib( caen_calibfname );
+  }
 
-      calfname.Clear();
-      calfname = caldir;
-      calfname += iboard; calfname += "_gr";
-      calfname += idrs; calfname += "_cell.txt";
-      cout << calfname << endl;
-
-      infile.open( calfname.Data() );
-
-      // Read in pedestals (cell)
-      while ( !infile.eof() )
-      {
-
-        for (int ich=0; ich<MAX_CALCH; ich++)
-        {
-          // skip first two lines
-          getline(infile, FullLine);
-          //cout << FullLine << endl;
-          getline(infile, FullLine);
-
-          const int NLINES = 1024/8;  // num lines in calib file for each ch
-          for (int iline=0; iline<NLINES; iline++)
-          {
-            getline(infile, FullLine);
-            // make FullLine an istringstream
-            istringstream line( FullLine.c_str() );
-
-            for (int icell=0; icell<8; icell++)
-            {
-              line >> ped_cell[iboard][idrs][ich][iline*8+icell];
-              //cout << ich << "\t" << iline*8+icell << "\t" << ped_cell[0][0][ich][iline*8+icell] << endl;
-            }
-          }
-        }
-      }  
-      infile.close();
-
-      // Read in nsamples
-      calfname.Clear();
-      calfname = caldir;
-      calfname += iboard; calfname += "_gr";
-      calfname += idrs; calfname += "_nsample.txt";
-      cout << calfname << endl;
-
-      infile.open( calfname.Data() );
-
-      while ( !infile.eof() )
-      {
-        for (int ich=0; ich<9; ich++)
-        {
-          // skip first two lines
-          getline(infile, FullLine);
-          //cout << FullLine << endl;
-          getline(infile, FullLine);
-
-          const int NLINES = 1024/8;  // num lines in calib file for each ch
-          for (int iline=0; iline<NLINES; iline++)
-          {
-            getline(infile, FullLine);
-            // make FullLine an istringstream
-            istringstream line( FullLine.c_str() );
-
-            for (int icell=0; icell<8; icell++)
-            {
-              line >> nsamp_cell[iboard][idrs][ich][iline*8+icell];
-              //cout << ich << "\t" << iline*8+icell << "\t" << nsamp_cell[0][0][ich][iline*8+icell] << endl;
-            }
-          }
-        }
-      }  
-      infile.close();
-
-      // Read in time corrections (only one set per drs)
-      calfname.Clear();
-      calfname = caldir;
-      calfname += iboard; calfname += "_gr";
-      calfname += idrs; calfname += "_time.txt";
-      cout << calfname << endl;
-
-      infile.open( calfname.Data() );
-
-      while ( !infile.eof() )
-      {
-        // skip first two lines
-        getline(infile, FullLine);
-        //cout << FullLine << endl;
-        getline(infile, FullLine);
-
-        const int NLINES = 1024/8;  // num lines in calib file for each ch
-        for (int iline=0; iline<NLINES; iline++)
-        {
-          getline(infile, FullLine);
-          // make FullLine an istringstream
-          istringstream line( FullLine.c_str() );
-
-          for (int icell=0; icell<8; icell++)
-          {
-            line >> time_cell[iboard][idrs][iline*8+icell];
-            //cout << ich << "\t" << iline*8+icell << "\t" << time_cell[0][0][iline*8+icell] << endl;
-          }
-        }
-      }  
-      infile.close();
-
-    } // idrs
-  } // iboard
-
-
+  infile.close();
 }
 
 int SetChannelMapFile(const char *chfname)
@@ -188,9 +109,11 @@ int SetChannelMapFile(const char *chfname)
 
 int SaveFile()
 {
+  cout << "Saving File, nevents = " << t->GetEntries() << endl;
   if ( savefile )
   {
     savefile->Write();
+    savefile->Close();
   }
 
   return 0;
@@ -198,6 +121,7 @@ int SaveFile()
 
 int pinit()
 {
+  cout << "v1742prdf pinit()" << endl;
 
   if (init_done) return 1;
   init_done = 1;
@@ -205,23 +129,8 @@ int pinit()
   TString name;
   TString leaflist;
 
+  cout << "Creating v1742.root" << endl;
   savefile = new TFile("v1742.root","RECREATE");
-
-  /*
-  for (int ich=0; ich<MAXCH; ich++)
-  {
-    name = "hadc"; name += ich;
-    hadc[ich] = new TH1D(name,name,4096,-0.5,4095.5);
-    hadc[ich]->SetXTitle("ADC Pedestal");
-
-    name = "htrace_flipped"; name += ich;
-    htrace_flipped[ich] = new TH1F(name,name,30*5,0.,30.);
-    htrace_flipped[ich]->SetXTitle("t (ns)");
-
-    name = "hprof_adc"; name += ich;
-    hprof_adc[ich] = new TProfile(name,name,1024,-0.5,1023.5,-0.5,4095.5);
-  }
-  */
 
   t = new TTree("t","DT5742 data");
   t->Branch("evt",&f_evt,"evt/I");
@@ -247,15 +156,58 @@ int pinit()
 
 int process_event(Event * e)
 {
-  Packet *p[MAX_PACKETS] = {0};
-
-  // Get packets, but require packet 2000
-  for (int iboard=0; iboard<MAX_PACKETS; iboard++)
+  int evt_type = e->getEvtType();
+  
+  // Start run
+  if ( evt_type == 9 )
   {
-    p[iboard] = e->getPacket(2000+iboard);
-    //cout << "Fount packet " << 2000+iboard << "\t" << p[iboard] << endl;
+    cout << "Found Begin Run Event" << endl;
+    return 0;
+  }
+  else if ( evt_type == 12 )
+  {
+    cout << "Found End Run Event" << endl;
+    return 0;
   }
 
+  f_evt = e->getEvtSequence();
+  if ( (f_evt%100) == 0 )
+  {
+    cout << "Processing event " << f_evt << endl;
+  }
+
+
+  if ( evt_type != 1 ) return 0;
+
+
+  Packet *p[MAX_PACKETS] = {0};
+
+  // Get packets
+  for (int iboard=0; iboard<MAX_PACKETS; iboard++)
+  {
+    //p[iboard] = e->getPacket(2001+iboard);
+    p[iboard] = e->getPacket(2001+iboard);
+    //cout << "Found packet " << 2001+iboard << "\t" << p[iboard] << endl;
+ 
+    if ( p[iboard] )
+    {
+      caen_calib[iboard]->apply_calibs( p[iboard] );
+
+      for (int ich=0; ich<NCHPERBOARD; ich++)
+      {
+        int feech = iboard*NCHPERBOARD + ich;
+        //cout << feech << endl;
+        for (int isamp=0; isamp<NSAMPLES; isamp++)
+        {
+          f_volt[feech][isamp] = caen_calib[iboard]->corrected(ich, isamp);
+          f_time[feech][isamp] = caen_calib[iboard]->caen_time(ich, isamp);
+        }
+      }
+    }
+
+  }
+
+  /*
   if ( p[0] )
   {
     f_evt = p[0]->iValue(0,"EVNR");
@@ -264,19 +216,18 @@ int process_event(Event * e)
       cout << "Event " << f_evt << endl;
     }
 
-    /*
-    // Dump for debugging
-    p[0]->dump();
-    string junk;
-    cout << "? ";
-    cin >> junk;
-    */
+    //// Dump for debugging
+    //p[0]->dump();
+    //string junk;
+    //cout << "? ";
+    //cin >> junk;
   }
   else
   {
     cout << "Packet 2000 NOT FOUND " << endl;
     return 0;
   }
+  */
 
   /*
   // For debugging
@@ -285,35 +236,6 @@ int process_event(Event * e)
   cout << f_evt << "\t" << s1 << "\t" << s2 << endl;
   */
 
-  for ( int ich = 0; ich < NCH; ich++)
-  {
-    int feech = chmap[ich];
-    int board = ich/32;
-    int drs = (chmap[ich]%32)/8;
-    int channel = feech%8;
-
-    //cout << "AAA " << board << "\t" << channel << endl;
-    int trigcell = p[board]->iValue(drs,"INDEXCELL");
-
-    if ( f_evt == 1 )
-    {
-      cout << "ch " << feech << "\t" << board << "\t" << drs << "\t" << channel << endl;
-    }
-
-    for ( int isamp = 0; isamp < 1024; isamp++)
-    {
-      int s = p[board]->iValue(isamp, chmap[ich]%32);
-
-      // pedestal correction
-      int corr_sample = (trigcell+isamp)%1024;
-      s -= ped_cell[board][drs][channel][corr_sample];
-      s -= nsamp_cell[board][drs][channel][corr_sample];
-
-      f_time[ich][isamp] = time_cell[board][drs][isamp];
-      f_volt[ich][isamp] = s;
-    }
-
-  }
   t->Fill();
 
   // Delete the packets

@@ -1,10 +1,14 @@
+#include <pmonitor.h>
+#include <v1742prdf.h>
 
-void v1742_toroot(const char *prdfname, const char *chmap = "")
+R__LOAD_LIBRARY(libv1742prdf.so)
+
+//void v1742_toroot(const char *prdfname, const char *chmap = "")
+void v1742_toroot(const char *prdfname, const int nevents = 0)
 {
-  gSystem->Load("libv1742prdf.so");
-  SetChannelMapFile(chmap);
+  //SetChannelMapFile(chmap);
   pfileopen(prdfname);
-  prun(5000);
+  prun(nevents);
 
   SaveFile();
   //cleanup();
