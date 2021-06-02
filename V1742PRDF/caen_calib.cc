@@ -367,7 +367,7 @@ float CAEN_Calib::corrected2(const int channel, const int sample) const
 
 float CAEN_Calib::caen_time(const int channel, const int sample) const
 {
-  if ( sample < 0 || sample >1023 || channel < 0 || channel > 31) return 0;
+  if ( sample < 0 || sample >1023 || channel < 0 || channel > 33) return 0;
   return time_corr[channel][sample];
 }
 

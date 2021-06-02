@@ -41,7 +41,10 @@ CAEN_Calib *caen_calib[MAX_PACKETS];
 
 
 /*
+ // laser config
 const char *caen_calibfname[MAX_PACKETS] = {
+  "caen_calibration/calib_0097_5G.dat",
+  "caen_calibration/calib_0106_5G.dat",
   "caen_calibration/calib_0081_5G.dat",
   "caen_calibration/calib_0087_5G.dat"
 };
