@@ -3,6 +3,7 @@
 #include <fstream>
 #include <vector>
 #include <utility>
+#include <string>
 #include <algorithm>
 
 #include "caen_calib.h"
@@ -23,7 +24,7 @@ CAEN_Calib::CAEN_Calib( const char *calibfname )
   cellCorrection = 1;
   nsampleCorrection = 1;
   timeCorrection = 1;
-  Tsamp = 0.2;
+  Tsamp =(float)((1.0/5000.0)*1000.0);
 
   load_calibs( calibfname );
 }
@@ -42,6 +43,19 @@ void CAEN_Calib::load_calibs( const char *calibfname )
   else
   {
     cout << "Reading calibrations from " << calibfname << endl;
+
+    // Get the sampling rate
+    string ss = calibfname;
+    string g2 = "2G";
+    string g1 = "1G";
+    if ( ss.find(g2) != std::string::npos )
+    {
+      Tsamp =(float)((1.0/2500.0)*1000.0);
+    }
+    else if ( ss.find(g1) != std::string::npos )
+    {
+      Tsamp =(float)((1.0/1000.0)*1000.0);
+    }
   }
 
   int index;

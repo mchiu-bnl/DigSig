@@ -1,5 +1,6 @@
 This code converts v1742 pDAQ output to the root format for DigSig.  You'll need
-to be in the sPHENIX environment since this code relies on pmonitor.
+to be in the sPHENIX environment, or have Martin Purschke's PHENIX Event/Packet library (with
+the CAEN v1742 packet) installed, as well as Martin's pmonitor package.
 
 To compile, type something like
 

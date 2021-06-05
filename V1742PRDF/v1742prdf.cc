@@ -40,43 +40,20 @@ Float_t f_time[NCH][NSAMPLES];
 CAEN_Calib *caen_calib[MAX_PACKETS];
 
 
-/*
- // laser config
-const char *caen_calibfname[MAX_PACKETS] = {
-  "caen_calibration/calib_0097_5G.dat",
-  "caen_calibration/calib_0106_5G.dat",
-  "caen_calibration/calib_0081_5G.dat",
-  "caen_calibration/calib_0087_5G.dat"
-};
-*/
-
-/*
-const char *caen_calibfname[MAX_PACKETS] = {
-  "caen_calibration/calib_12064_5G.dat",
-  "caen_calibration/calib_0106_5G.dat",
-  "caen_calibration/calib_10906_5G.dat",
-  "caen_calibration/calib_12067_5G.dat",
-  "caen_calibration/calib_0081_5G.dat",
-  "caen_calibration/calib_0097_5G.dat",
-  "caen_calibration/calib_0120_5G.dat",
-  "caen_calibration/calib_0087_5G.dat"
-};
-*/
-
-
 int SaveFile();
 
 void LoadCorrections()
 {
   ifstream infile("caen.list");
   int serial_no = 0;
+  int freq = 0;
 
 
   char caen_calibfname[1024];
   for (int iboard=0; iboard<MAX_PACKETS; iboard++)
   {
-    infile >> serial_no;
-    sprintf(caen_calibfname,"caen_calibration/calib_%04d_5G.dat",serial_no);
+    infile >> serial_no >> freq;
+    sprintf(caen_calibfname,"caen_calibration/calib_%04d_%1dG.dat",serial_no,freq);
     //cout << "Loading " << caen_calibfname << endl;
     caen_calib[iboard] = new CAEN_Calib( caen_calibfname );
   }
@@ -188,7 +165,6 @@ int process_event(Event * e)
   // Get packets
   for (int iboard=0; iboard<MAX_PACKETS; iboard++)
   {
-    //p[iboard] = e->getPacket(2001+iboard);
     p[iboard] = e->getPacket(2001+iboard);
     //cout << "Found packet " << 2001+iboard << "\t" << p[iboard] << endl;
  
