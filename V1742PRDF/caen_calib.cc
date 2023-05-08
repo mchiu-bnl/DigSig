@@ -372,6 +372,7 @@ float CAEN_Calib::corrected(const int channel, const int sample) const
   return adc_corr[channel][sample];
 }
 
+// Corrected ADC for sampling every 200 ns (good for TH1)
 float CAEN_Calib::corrected2(const int channel, const int sample) const
 {
   if ( sample < 0 || sample >1023 || channel < 0 || channel > 33) return 0;
@@ -379,6 +380,7 @@ float CAEN_Calib::corrected2(const int channel, const int sample) const
   return adc_corr2[channel][sample];
 }
 
+// correct caen time (good for TGraph)
 float CAEN_Calib::caen_time(const int channel, const int sample) const
 {
   if ( sample < 0 || sample >1023 || channel < 0 || channel > 33) return 0;
