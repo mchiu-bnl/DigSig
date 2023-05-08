@@ -10,18 +10,19 @@
 #include <TFile.h>
 #include <TTree.h>
 #include <TString.h>
-//#include <TH1.h>
+#include <TH1.h>
 
 int init_done = 0;
 
 using namespace std;
 
-const int MAX_PACKETS = 8; // Maximum number of packets (ie, boards)
+const int MAX_PACKETS = 10; // Maximum number of packets (ie, boards)
 const int MAX_DRS = 4;     // Maximum number of DRS4 per board
 const int MAX_CALCH = 9;   // Maximum number of ch per DRS4
 const int NCHPERBOARD = 34; // Number of channels in one V1742 (32 + 2 Trig)
 
 const int NBOARDS = 8;
+//const int NBOARDS = 10;
 const int NCH = NBOARDS*NCHPERBOARD;      // number active channels
 const int NSAMPLES = 1024; // num samples in a waveform
 
@@ -41,6 +42,98 @@ CAEN_Calib *caen_calib[MAX_PACKETS];
 
 
 int SaveFile();
+
+// Check alignment by looking for mis-alignment in TR0 and TR1 channels
+TH1 *h_tdiff = 0;
+Float_t ref_times[NBOARDS][2];
+void CheckAlignment()
+{
+
+  static int first_event = 1;
+  if ( first_event==1 )
+  {
+    cout << "CHECKING BOARD ALIGNMENT" << endl;
+
+    h_tdiff = new TH1F("h_tdiff","TR tdiffs", 200, -100,100);
+  }
+
+  h_tdiff->Reset();
+
+  // Board Alignment Check
+  float tr0_time = 0;
+  for (int iboard=0; iboard<NBOARDS; iboard++)
+  {
+
+    for (int ich=32; ich<34; ich++)
+    {
+      int feech = iboard*34 + ich;
+
+      // randomly pick samples 10-40 (2-8ns)for pedestal
+      float ped = 0.;
+      float npedsamp = 0;
+      for (int isamp=10; isamp<40; isamp++)
+      {
+        ped += f_volt[feech][isamp];
+        npedsamp += 1.0;
+      }
+      ped /= npedsamp;
+
+      int trig = 0;
+      float threshold = 100.;
+      for (int isamp=0; isamp<NSAMPLES; isamp++)
+      {
+        
+        if ( fabs( f_volt[feech][isamp]-ped ) > threshold && trig==0 )
+        {
+          trig = isamp;
+          if (iboard==0 && ich==32)
+          {
+            tr0_time = trig;
+          }
+          if ( first_event == 1 )
+          {
+            // Get initial deltas
+            ref_times[iboard][ich-32] = trig - tr0_time;
+            cout << "Reftime " << iboard << "\t" << feech << "\t" << ref_times[iboard][ich-32] << endl;
+          }
+
+          break;
+        }
+
+      }
+
+      // Fill tdiffs
+      if ( trig>0 )
+      {
+        cout << feech << "\t" << trig << "\t" << tr0_time << "\t" << ref_times[iboard][ich-32]
+          << trig - tr0_time - ref_times[iboard][ich-32] << endl;
+        h_tdiff->Fill( trig - tr0_time - ref_times[iboard][ich-32] );
+      }
+      else
+      {
+        cout << "ERROR, no trigger " << f_evt << "\t" << iboard << " " << feech << endl;
+      }
+
+    }
+  }
+
+  // Check for high RMS
+  Double_t tdiff_rms = h_tdiff->GetRMS();
+  if ( tdiff_rms != 0 )
+  {
+    cout << "RMS " << f_evt << "\t" << tdiff_rms << endl;
+    if ( tdiff_rms > 3.0 )
+    {
+      h_tdiff->Print("ALL");
+    }
+  }
+
+
+  if ( first_event==1 )
+  {
+    first_event = 0;
+  }
+}
 
 void LoadCorrections()
 {
@@ -137,7 +230,7 @@ int pinit()
 int process_event(Event * e)
 {
   int evt_type = e->getEvtType();
-  
+
   // Start run
   if ( evt_type == 9 )
   {
@@ -167,9 +260,10 @@ int process_event(Event * e)
   {
     p[iboard] = e->getPacket(2001+iboard);
     //cout << "Found packet " << 2001+iboard << "\t" << p[iboard] << endl;
- 
+
     if ( p[iboard] )
     {
+
       caen_calib[iboard]->apply_calibs( p[iboard] );
 
       for (int ich=0; ich<NCHPERBOARD; ich++)
@@ -182,38 +276,10 @@ int process_event(Event * e)
           f_time[feech][isamp] = caen_calib[iboard]->caen_time(ich, isamp);
         }
       }
+
     }
 
   }
-
-  /*
-  if ( p[0] )
-  {
-    f_evt = p[0]->iValue(0,"EVNR");
-    if ( f_evt%1000 == 0 )
-    {
-      cout << "Event " << f_evt << endl;
-    }
-
-    //// Dump for debugging
-    //p[0]->dump();
-    //string junk;
-    //cout << "? ";
-    //cin >> junk;
-  }
-  else
-  {
-    cout << "Packet 2000 NOT FOUND " << endl;
-    return 0;
-  }
-  */
-
-  /*
-  // For debugging
-  int s1 = p[0]->iValue(100, 0);
-  int s2 = p[0]->iValue(100, 8);
-  cout << f_evt << "\t" << s1 << "\t" << s2 << endl;
-  */
 
   t->Fill();
 
@@ -222,6 +288,8 @@ int process_event(Event * e)
   {
     if ( p[ipkt]!=0 ) delete p[ipkt];
   }
+
+  //CheckAlignment();
 
   return 0;
 
