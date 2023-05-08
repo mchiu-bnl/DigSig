@@ -222,6 +222,26 @@ void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
   }
 }
 
+Double_t DigSig::GetSplineAmpl()
+{
+  TSpline3 s3("s3",gSubPulse);
+
+  // First find maximum, to rescale
+  f_ampl = -999999.;
+  double step_size = 0.01;
+  //cout << "step size " << step_size << endl;
+  for (double ix=0; ix<nsamples; ix += step_size)
+  {
+    Double_t val = s3.Eval(ix);
+    if ( val > f_ampl )
+    {
+      f_ampl = val;
+    }
+  }
+
+  return f_ampl;
+}
+
 // This does a straight line fit for now...
 /*
 Double_t DigSig::FitPulse()
@@ -279,6 +299,7 @@ void DigSig::FillPed0(const Int_t sampmin, const Int_t sampmax)
     ped0 = ped0stats->Mean();
     ped0rms = ped0stats->RMS();
     //cout << "ped0 " << ch << " " << n << "\t" << ped0 << endl;
+    cout << "ped0 " << ch << "\t" << ped0 << endl;
   }
 
 }

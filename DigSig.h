@@ -69,6 +69,9 @@ public:
   /** MBD method to get time, max_samp is the sample to use */
   Double_t MBD(const Int_t max_samp);
  
+  /** Get pulse amplitude with spline fit */
+  Double_t GetSplineAmpl();
+
   /** Simple integral to get total charge, etc */
   Double_t Integral(const Double_t xmin, const Double_t xmax);
 

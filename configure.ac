@@ -1,13 +1,16 @@
-AC_INIT(configure.in)
+AC_INIT(DigSig,1.0)
+#AC_CONFIG_SRCDIR()
+AM_INIT_AUTOMAKE
 
-AM_INIT_AUTOMAKE(DigSig, 1.00)
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_DISABLE_STATIC
 AC_PROG_LIBTOOL
 AC_PROG_CXX([CC g++])
 
 if test $ac_cv_prog_gcc = yes; then
-  CXXFLAGS="$CXXFLAGS -Wall -std=c++11"
+  CXXFLAGS="$CXXFLAGS -Wall -std=c++17"  # sphenix env
+#  CXXFLAGS="$CXXFLAGS -Wall -std=c++11"
 fi
 
 ROOTLIBS=`root-config --libs`
