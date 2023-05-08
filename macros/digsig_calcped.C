@@ -1,4 +1,6 @@
 #include <iostream>
+#include <DigAna.h>
+#include <DigSig.h>
 
 // DRS4 studies
 /*
@@ -27,13 +29,20 @@ const Int_t end_sample = 2;
 // MBD D/S Testing
 const int MAXCH = 256;
 const int NSAMP = 20;
+//const int NSAMP = 30;
 const Int_t begin_sample = 0;  // sample ranges in ns for pedestal
 const Int_t end_sample = 1;
+
+#if defined(__CLING__)
+//R__LOAD_LIBRARY(libdigsig)
+#endif
 
 // NCH total number of channels (including charge channels)
 void digsig_calcped( const char *rootfname = "dt5742.root", int NCH=MAXCH )
 {
-  gSystem->Load("libdigsig.so");
+#if defined(__CINT__)
+//  gSystem->Load("libdigsig.so");
+#endif
 
   TString savefname = rootfname;
   savefname.ReplaceAll(".root","_ped.root");
@@ -63,6 +72,7 @@ void digsig_calcped( const char *rootfname = "dt5742.root", int NCH=MAXCH )
     digana.FillPed0(begin_sample,end_sample);
   }
 
+  // Save pedestals to text output
   TString pedfname = rootfname;
   gSystem->Exec("mkdir -p PED");
   pedfname.ReplaceAll(".root","_ped.txt");

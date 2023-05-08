@@ -67,8 +67,8 @@ private:
   Int_t f_evt;
   Int_t f_spillevt;
   Int_t f_dtstamp;
-  Float_t f_x[128][1024];  // time or sample
-  Float_t f_y[128][1024];  // voltage or adc
+  Float_t f_x[272][1024];  // time or sample
+  Float_t f_y[272][1024];  // voltage or adc
 
   TH1 *hdTime;
 

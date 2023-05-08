@@ -22,6 +22,7 @@ using namespace std;
 const int MAXADC = 4;           // Max Possible ADC Boards 
 const int NCH_PER_BOARD = 64;   // Num Ch in ADC Board
 const int NSAMPLES = 20;
+//const int NSAMPLES = 30;
 
 int NADC = 1;   // Num ADC Boards 
 int NCH = 64;   // Num Ch total
@@ -73,9 +74,13 @@ void read_mbd(const char *fname = "test_odd.dat")
   int nevents_per_delay;
   int delay_step;
 
-  datfile >> ndelays;
-  datfile >> nevents_per_delay;
-  datfile >> delay_step;
+  TString t_fname = fname;
+  if ( t_fname.EndsWith(".dat2") )
+  { 
+    datfile >> ndelays;
+    datfile >> nevents_per_delay;
+    datfile >> delay_step;
+  }
 
   h_pars = new TH1I("h_pars","Calib Run Parameters",5,0,5);
   h_pars->Fill(0., ndelays);
@@ -88,16 +93,20 @@ void read_mbd(const char *fname = "test_odd.dat")
   unsigned int marker;
   unsigned int header;
   unsigned int trailer;
+  int bad_evt = 0;
   while ( datfile >> hex >> marker )
   {
     if ( verbose ) cout << "marker " << hex << marker << dec << endl;
 
-    /*
-    if ( marker&0xffffff != 0x11ffff )
+    if ( (marker&0xffffffff) != 0x3ffff )
     {
       cout << "ERROR in marker, " << hex << marker << dec << endl;
+      bad_evt = 1;
     }
-    */
+    else
+    {
+      bad_evt = 0;
+    }
 
     // loop over adc boards
     for (int iadc = 0; iadc<NADC; iadc++)
@@ -106,11 +115,19 @@ void read_mbd(const char *fname = "test_odd.dat")
       //if (raw_data[idx] == 0x11ffff) 
       if ( iadc == 0 )
       {
-        f_evt++;
+        if ( bad_evt==0 ) f_evt++;
 
         //if ( f_evt == 10 ) return;
 
-        if ( f_evt%nevents_per_delay == 0 ) cout << "Event " << f_evt << endl;
+        if ( nevents_per_delay!=0 )
+        {
+          if ( f_evt%nevents_per_delay == 0 ) cout << "Event " << f_evt << endl;
+        }
+        else if ( f_evt%100 == 0 )
+        {
+          cout << "Event " << f_evt << endl;
+        }
+
         if ( verbose ) cout << hex << raw_data[idx] << endl;
       }
       else
@@ -156,7 +173,7 @@ void read_mbd(const char *fname = "test_odd.dat")
     if ( verbose ) cout << "done with event " << dec << f_evt << endl;
 
     idx = 0;  // reset so that raw_data starts fresh
-    t->Fill();
+    if ( bad_evt==0 ) t->Fill();
 
     if ( verbose )
     {

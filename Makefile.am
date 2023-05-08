@@ -1,7 +1,8 @@
 AUTOMAKE_OPTIONS = foreign
 
 ACLOCAL_AMFLAGS = -I m4
-AM_CXXFLAGS = -g -Wall -Werror -Wextra -Wno-unused-parameter
+
+AM_CXXFLAGS = -g -O2 -Wall -Werror -Wextra -Wno-unused-parameter
 
 AM_CPPFLAGS = -I$(includedir) -I$(ROOTSYS)/include 
 
