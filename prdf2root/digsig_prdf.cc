@@ -170,7 +170,7 @@ int process_event(Event * e)
           if ( f_volt[feech][isamp] <= 100 )
           {
             flag_err = 1;
-            cout << "BAD " << f_evt << "\t" << feech << "\t" << isamp
+            cout << "BAD " << f_evt << "\t" << feech << "\t" << f_time[feech][isamp]
                 << "\t" << f_volt[feech][isamp] << endl;
           }
         }
