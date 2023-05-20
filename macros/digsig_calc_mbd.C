@@ -186,6 +186,7 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         Double_t threshold = 0.5;
         sig->GetSplineAmpl();
         f_t0[ich] = sig->dCFD( threshold );
+        f_t0[ich] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
         f_adc[ich] = sig->GetAmpl();
         if ( f_adc[ich]<20 )
         {
@@ -212,9 +213,10 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         }
         else
         {
-//chiu Skip for now
           // Convert TDC to ns
+//chiu Skip for now
           //f_t0[ich] = tdc2time[ich]->Eval( tdc );
+ 
           f_t0[ich] = tdc*0.00189;  // simple linear correction
         }
 
