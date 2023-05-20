@@ -1,6 +1,6 @@
 #include <iostream>
-#include <DigAna.h>
-#include <DigSig.h>
+//#include <DigAna.h>
+//#include <DigSig.h>
 
 // DRS4 studies
 /*
@@ -28,13 +28,14 @@ const Int_t end_sample = 2;
 
 // MBD D/S Testing
 const int MAXCH = 256;
-const int NSAMP = 20;
+//const int NSAMP = 20;
 //const int NSAMP = 30;
+const int NSAMP = 31;
 const Int_t begin_sample = 0;  // sample ranges in ns for pedestal
 const Int_t end_sample = 1;
 
 #if defined(__CLING__)
-//R__LOAD_LIBRARY(libdigsig)
+R__LOAD_LIBRARY(libdigsig)
 #endif
 
 // NCH total number of channels (including charge channels)

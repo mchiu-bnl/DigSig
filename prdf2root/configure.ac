@@ -9,7 +9,8 @@ AC_PROG_LIBTOOL
 AC_PROG_CXX([CC g++])
 
 if test $ac_cv_prog_gcc = yes; then
-  CXXFLAGS="$CXXFLAGS -Wall -std=c++11"
+  #CXXFLAGS="$CXXFLAGS -Wall -std=c++11"
+  CXXFLAGS="$CXXFLAGS -Wall -std=c++17"
 dnl  CXXFLAGS="$CXXFLAGS -Wall"
 fi
 

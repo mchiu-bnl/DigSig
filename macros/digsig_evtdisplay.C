@@ -9,14 +9,21 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
 
   Int_t evt;
 
-  /* // DRS4
+  // MBD 1008
+  const int NCH = 256;
+  const int NSAMPLES = 31;
+
+  /*
+  // DRS4
   const int NCH = 4;
   const int NSAMPLES = 1024;
   */
 
+  /*
   // CAEN DT5742
   const int NCH = 16;
   const int NSAMPLES = 1024;
+  */
 
   /*
   // MBD DS TEST
@@ -40,8 +47,13 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
   }
 
   //TCanvas *c_display = new TCanvas("c_display","event display",1600,800);
-  TCanvas *c_display = new TCanvas("c_display","event display",800,800);
-  c_display->Divide(4,4);
+  TCanvas *c_display[4]
+  for (int icv=0; icv<4; icv++)
+  {
+    name = "c_display"; name += icv;
+    c_display[icv] = new TCanvas("c_display","event display",800,800);
+    c_display[icv]->Divide(8,8);
+  }
 
   TGraph *gpulse[NCH];
   for (int ich=0; ich<NCH; ich++)
@@ -57,7 +69,7 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
     gpulse[ich]->SetLineColor(4);
   }
 
-  c_display->cd(1);
+  c_display[0]->cd(1);
 
   int nskipped = 0; // number of skipped, uninteresting events
   int plotevt = -1; // an event that was specified to plot
@@ -86,10 +98,12 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
         }
         */
 
+        /*
         if ( ich==4 && ch[ich][isamp]>1530. )
         {
           trig = 1;
         }
+        */
       }
 
     }
@@ -108,16 +122,8 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
     {
       for (int ich=0; ich<NCH; ich++)
       {
-        c_display->cd(ich+1);
-
-        // for DS TEST
-        /*
-        if (ich!=4&&ich!=6&&ich!=12&&ich!=14) continue;
-        if (ich==4) c_display->cd(1);
-        else if (ich==6) c_display->cd(2);
-        else if (ich==12) c_display->cd(3);
-        else if (ich==14) c_display->cd(4);
-        */
+        int cv = ich/64;
+        c_display[cv]->cd(ich%64+1);
 
         //gpulse[ich]->GetXaxis()->SetRangeUser(165,200);
         //gpulse[ich]->GetXaxis()->SetRangeUser(15,200);
@@ -149,7 +155,7 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
         else if ( junk[0] == 'w' )
         {
           name = "evt_"; name += evt; name += ".png";
-          c_display->SaveAs(name);
+          c_display[cv]->SaveAs(name);
         }
         else if ( isdigit(junk[0]) )
         {

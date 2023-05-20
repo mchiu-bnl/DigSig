@@ -1,5 +1,9 @@
 #include <iostream>
 
+#if defined(__CLING__)
+R__LOAD_LIBRARY(libdigsig)
+#endif
+
 /*
 //NEW BBC Electronics
 const int NCH = 2;
@@ -10,7 +14,8 @@ TString template_fname = "TIMING16_TEMPLATE/sig_gen2";
 
 //MBD DS TEST
 const int MAXCH = 256;
-const int NSAMP = 20;
+//const int NSAMP = 20;
+const int NSAMP = 31;
 int NCH;    // number of ch's to process
 
 TString template_fname = "TEMPLATES/sig_gen0";
@@ -24,17 +29,19 @@ Float_t f_t0[MAXCH];
 Float_t f_adc[MAXCH];
 
 int time_method[MAXCH];
-const int MAX_SAMP = 6;     // use this sample to get the MBD time
+//const int MAX_SAMP = 6;     // use this sample to get the MBD time
+//const int MAX_SAMP = 9;     // use this sample to get the MBD time
+//const int MAX_SAMP = 9;     // use this sample to get the MBD time
+const int MAX_SAMP = 14;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
 void set_time_method()
 {
   for (int ich=0; ich<NCH; ich++)
   {
-    //int chtype = (ich/8)%2;   // 0=time ch, 1=charge ch
-    int chtype = (ich/16)%2;   // 0=time ch, 1=charge ch
+    int tq = (ich/8)%2;   // 0=time ch, 1=charge ch
 
-    if ( chtype==0 ) time_method[ich] = 2;  // time ch
+    if ( tq==0 )     time_method[ich] = 2;  // time ch
     else             time_method[ich] = 0;  // charge ch
   }
 }
@@ -84,7 +91,8 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
     cout << "Setting NCH = " << NCH << endl;
   }
 
-  read_tcalib();
+//chiu SKIP FOR NOW
+  //read_tcalib();
 
   TString savefname = rootfname;
   savefname.ReplaceAll(".root","_times.root");
@@ -111,23 +119,10 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
   // Enable only certain channels for analysis
   /*
   digana.SkipAll();
-  for (int ich=0; ich<8; ich++)
-  {
-    digana.EnableCh(4);
-    digana.EnableCh(6);
-    digana.EnableCh(12);
-    digana.EnableCh(14);
-  }
-  */
-  /*
-  for (int ich=0; ich<8; ich++)
-  {
-    digana.EnableCh(ich);
-  }
-  for (int ich=16; ich<24; ich++)
-  {
-    digana.EnableCh(ich);
-  }
+  digana.EnableCh(4);
+  digana.EnableCh(6);
+  digana.EnableCh(12);
+  digana.EnableCh(14);
   */
 
   // Set Time Reco Method to use
@@ -137,6 +132,12 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
   if ( nevents != 0 ) nentries = nevents;
 
   // Set Calibrations
+
+  // Do evt-by-evt pedestal using sample range below
+  digana.SetEventPed0Range(0,1);
+
+//chiu SKIP FOR NOW
+/*
   TString pedfname = rootfname;
   pedfname.ReplaceAll(".root","_ped.txt");
   Int_t index = pedfname.Last('/');
@@ -148,6 +149,7 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
     cerr << "ERROR: can't open file " << pedfname << "\t" << pedstatus << endl;
     return 0;
   }
+*/
 
   // Now read in template waveforms
   // Must change to be channel specific!!!!
@@ -185,7 +187,15 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         sig->GetSplineAmpl();
         f_t0[ich] = sig->dCFD( threshold );
         f_adc[ich] = sig->GetAmpl();
-        if ( f_adc[ich]<20 ) f_t0[ich] = -9999.;
+        if ( f_adc[ich]<20 )
+        {
+          f_t0[ich] = -9999.;
+        }
+
+        if ( ievt<10 && ich==8)
+        {
+          cout << "dcfdcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_adc[ich] << endl;
+        }
       }
       else if ( time_method[ich] == 2 ) // Use MBD method to get time
       {
@@ -194,19 +204,31 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         Double_t threshold = 0.5;
         //const int MAX_SAMP = 8;     // use this sample to get the time
         Double_t tdc = sig->MBD( MAX_SAMP );
-        f_adc[ich] = sig->GetAmpl();
-        //cout << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_adc[ich] << endl;
-        if ( f_adc[ich]<20 ) f_t0[ich] = -9999.;
+        f_adc[ich] = sig->GetSplineAmpl();
+
+        if ( f_adc[ich]<20 )
+        {
+          f_t0[ich] = -9999.;
+        }
         else
         {
+//chiu Skip for now
           // Convert TDC to ns
-          f_t0[ich] = tdc2time[ich]->Eval( tdc );
-          //f_t0[ich] = f_t0[ich]*0.00189;  // simple linear correction
+          //f_t0[ich] = tdc2time[ich]->Eval( tdc );
+          f_t0[ich] = tdc*0.00189;  // simple linear correction
         }
+
+        /*
+        if ( ievt<10 && ich==0)
+        {
+          cout << "mbdtcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_adc[ich] << endl;
+        }
+        */
 
       }
 
       // Here we dump the output to csv file
+/*chiu SKIP FOR NOW
       if ( ich>=16 && ich<24 && f_t0[ich-16]>-100 && f_t0[ich-16]<31 )
       {
         csv_timefile << f_evt << "," << ich-16 << ",";
@@ -233,6 +255,7 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         csv_timefile<< f_t0[ich-16] << endl;
         csv_chfile<< f_adc[ich] << endl;
       }
+*/
 
       if ( verbose )
       {

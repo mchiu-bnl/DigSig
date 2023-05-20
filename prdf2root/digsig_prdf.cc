@@ -144,6 +144,14 @@ int process_event(Event * e)
     cout << "Processing event " << f_evt << endl;
   }
 
+  //== SKIPPING FIRST TWO EVENTS!!!!
+  // THIS IS A KLUDGE ONLY FOR THE RCDAQ PROBLEMS
+  if ( f_evt < 4 )
+  {
+    cout << "Skipping evt " << f_evt << endl;
+    return 0;
+  }
+
   if ( evt_type != 1 ) return 0;
 
   Packet *p[MAX_PACKETS] = {0};

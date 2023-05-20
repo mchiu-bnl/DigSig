@@ -13,11 +13,21 @@ then
 fi
 
 prdf=$1
-# 
+nevt=0
+if [[ $# -gt 1 ]]
+then
+  nevt=$2
+  echo Processing $2 events
+fi
+
 if echo $1 | grep 'prdf$'
 then
-	echo root.exe -b -q prdf2root.C\(\"${prdf}\"\)
-	root.exe -b -q prdf2root.C\(\"${prdf}\"\)
+	echo root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
+	root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
+    run=${prdf%%.prdf}
+    run=${run#*-}
+    mv prdf.root prdf_${run}.root
+
 else
 
     echo "Processing $1"
@@ -25,7 +35,7 @@ else
 	do
 	    prdf=`printf "junk/junk-%08d-0000.prdf" $run`
 	    echo $run $setting $prdf
-	    root.exe -b -q prdf2root.C\(\"${prdf}\"\)
+	    root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
 	    mv prdf.root prdf_${run}.root
 	done
 fi

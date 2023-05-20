@@ -339,7 +339,7 @@ void DigSig::SetPed0(const Double_t mean, const Double_t rms)
   //cout << "ch " << ch << " Ped = " << ped0 << endl;
 }
 
-// Get Event by Event Ped9 if requested
+// Get Event by Event Ped0 if requested
 void DigSig::CalcEventPed0(const Int_t minpedsamp, const Int_t maxpedsamp)
 {
   hPed0->Reset();
