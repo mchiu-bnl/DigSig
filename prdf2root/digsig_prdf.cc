@@ -35,6 +35,8 @@ Int_t f_ch;
 Float_t f_volt[NCH][NSAMPLES];
 Float_t f_time[NCH][NSAMPLES];
 
+TString savefname;
+
 //int SaveFile();
 
 // Reset to start fresh at the beginning of the event
@@ -83,18 +85,21 @@ int SaveFile()
   return 0;
 }
 
-int pinit()
+void SetSaveFileName(const char *fname)
 {
-  cout << "prdf pinit()" << endl;
+  savefname = fname;
+  cout << "Setting savefile to " << savefname << endl;
 
-  if (init_done) return 1;
+  //cout << "prdf pinit()" << endl;
+
+  if (init_done) return;
   init_done = 1;
 
   TString name;
   TString leaflist;
 
-  cout << "Creating prdf.root" << endl;
-  savefile = new TFile("prdf.root","RECREATE");
+  cout << "Creating " << savefname << endl;
+  savefile = new TFile(savefname,"RECREATE");
 
   t = new TTree("t","PRDF Data");
   t->Branch("run",&f_run,"run/I");
@@ -116,6 +121,11 @@ int pinit()
 
   //LoadCorrections();
 
+  return;
+}
+
+int pinit()
+{
   return 0;
 }
 

@@ -22,21 +22,21 @@ fi
 
 if echo $1 | grep 'prdf$'
 then
-	echo root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
-	root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
-    run=${prdf%%.prdf}
-    run=${run#*-}
-    mv prdf.root prdf_${run}.root
+
+  echo root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
+  root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
+  run=${prdf%%.prdf}
+  run=${run#*-}
 
 else
 
-    echo "Processing $1"
-	cat $1 | while read run setting
-	do
-	    prdf=`printf "junk/junk-%08d-0000.prdf" $run`
-	    echo $run $setting $prdf
-	    root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
-	    mv prdf.root prdf_${run}.root
-	done
+  echo "Processing $1"
+  cat $1 | while read run setting
+  do
+    prdf=`printf "junk/junk-%08d-0000.prdf" $run`
+    echo $run $setting $prdf
+    root.exe -b -q prdf2root.C\(\"${prdf}\",${nevt}\)
+  done
+
 fi
 
