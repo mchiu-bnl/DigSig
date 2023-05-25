@@ -47,7 +47,7 @@ int digsig_evtdisplay(const char *fname = "dt5742.root")
   }
 
   //TCanvas *c_display = new TCanvas("c_display","event display",1600,800);
-  TCanvas *c_display[4]
+  TCanvas *c_display[4];
   for (int icv=0; icv<4; icv++)
   {
     name = "c_display"; name += icv;

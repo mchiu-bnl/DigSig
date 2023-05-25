@@ -24,7 +24,7 @@ fi
 if echo $1 | grep 'root$'
 then
     rootf=$fname
-	echo root.exe -b -q digsig_calc_mdb.C\(\"${rootf}\",${nevt}\)
+	echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
 	root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
 else
 

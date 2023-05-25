@@ -14,6 +14,7 @@ TString template_fname = "TIMING16_TEMPLATE/sig_gen2";
 
 //MBD DS TEST
 const int MAXCH = 256;
+const int NPMT = 128;
 //const int NSAMP = 20;
 const int NSAMP = 31;
 int NCH;    // number of ch's to process
@@ -25,14 +26,21 @@ const int verbose = 0;
 //TH1 *htdiff[NCH];
 
 Int_t   f_evt;
-Float_t f_t0[MAXCH];
-Float_t f_adc[MAXCH];
+Short_t f_bn[2];  // number of hit PMTs, [arm]
+Float_t f_bq[2];  // Total charge sum, [arm]
+Float_t f_bt[2];  // Mean Time, [arm]
+Float_t f_bz;   // BBC zvtx
+Float_t f_bt0;  // BBC t0
+Float_t f_tt[NPMT];  // time from t-channel
+Float_t f_tq[NPMT];  // time from q-channel
+Float_t f_q[NPMT];   // charge
 
 int time_method[MAXCH];
 //const int MAX_SAMP = 6;     // use this sample to get the MBD time
 //const int MAX_SAMP = 9;     // use this sample to get the MBD time
 //const int MAX_SAMP = 9;     // use this sample to get the MBD time
-const int MAX_SAMP = 14;     // use this sample to get the MBD time
+//const int MAX_SAMP = 14;     // use this sample to get the MBD time
+const int MAX_SAMP = 3;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
 void set_time_method()
@@ -70,11 +78,20 @@ void read_tcalib(const char *tcalibfname = "mbd.tcalib")
   }
 }
 
+void reset_event()
+{
+  for (int iarm=0; iarm<2; iarm++)
+  {
+    f_bn[iarm] = 0;       // number of hit PMTs, north
+    f_bq[iarm] = 0.;      // Total charge sum, north
+    f_bt[iarm] = -9999.;  // Mean Time, north
+    f_bz = -9999.;        // BBC zvtx
+    f_bt0 = -9999.;       // BBC t0
+  }
+}
+
 int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
 {
-  ofstream csv_timefile("case17_delay109_20210915_laser_time.csv");
-  ofstream csv_chfile("case17_delay109_20210915_laser_charge.csv");
-
   gSystem->Load("libdigsig.so");
   //Float_t f_evt;
 
@@ -101,14 +118,25 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
   TString name, leaf;
   TTree *tree = new TTree("t","DigSig times");
   tree->Branch("evt", &f_evt, "evt/I");
-  for (int ich=0; ich<NCH; ich++)
+  tree->Branch("bns", &f_bn[0], "bns/S");
+  tree->Branch("bnn", &f_bn[1], "bnn/S");
+  tree->Branch("bqs", &f_bq[0], "bqs/F");
+  tree->Branch("bqn", &f_bq[1], "bqn/F");
+  tree->Branch("bts", &f_bt[0], "bts/F");
+  tree->Branch("btn", &f_bt[1], "btn/F");
+  tree->Branch("bz",  &f_bz,  "bz/F");
+  tree->Branch("bt0", &f_bt0, "bt0/F");
+  for (int ipmt=0; ipmt<NPMT; ipmt++)
   {
-    name = "t"; name += ich; 
+    name = "tt"; name += ipmt; 
     leaf = name; leaf += "/F";
-    tree->Branch(name, &f_t0[ich], leaf);
-    name = "ch"; name += ich; 
+    tree->Branch(name, &f_tt[ipmt], leaf);
+    name = "tq"; name += ipmt; 
     leaf = name; leaf += "/F";
-    tree->Branch(name, &f_adc[ich], leaf);
+    tree->Branch(name, &f_tq[ipmt], leaf);
+    name = "q"; name += ipmt; 
+    leaf = name; leaf += "/F";
+    tree->Branch(name, &f_q[ipmt], leaf);
   }
 
   TCanvas *ac = new TCanvas("ac","ac",800,800);
@@ -169,15 +197,22 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
     digana.ProcessEvent(ievt);
     f_evt = digana.get_evt();
 
+    reset_event();
+
     for (int ich=0; ich<NCH; ich++)
     {
       DigSig *sig = digana.GetSig(ich);
 
+      int sn = ich/128;     // south or north
+      //int quad = ich/64;    // quadrant
+      int pmtch = (ich/16)*8 + ich%8;
+      int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
+
       if ( time_method[ich] == 1 ) // Use Template fit to get time
       {
         sig->FitTemplate();
-        f_t0[ich] = sig->GetTime();
-        f_adc[ich] = sig->GetAmpl();
+        f_tq[pmtch] = sig->GetTime();
+        f_q[pmtch] = sig->GetAmpl();
       }
       else if ( time_method[ich] == 0 ) // Use dCFD method to get time
       {
@@ -185,17 +220,17 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         //
         Double_t threshold = 0.5;
         sig->GetSplineAmpl();
-        f_t0[ich] = sig->dCFD( threshold );
-        f_t0[ich] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
-        f_adc[ich] = sig->GetAmpl();
-        if ( f_adc[ich]<20 )
+        f_tq[pmtch] = sig->dCFD( threshold );
+        f_tq[pmtch] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
+        f_q[pmtch] = sig->GetAmpl();
+        if ( f_q[pmtch]<20 )
         {
-          f_t0[ich] = -9999.;
+          f_tq[pmtch] = -9999.;
         }
 
         if ( ievt<10 && ich==8)
         {
-          cout << "dcfdcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_adc[ich] << endl;
+          cout << "dcfdcalc " << ievt << "\t" << ich << "\t" << f_tq[ich] << "\t" << f_q[ich] << endl;
         }
       }
       else if ( time_method[ich] == 2 ) // Use MBD method to get time
@@ -205,11 +240,11 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         Double_t threshold = 0.5;
         //const int MAX_SAMP = 8;     // use this sample to get the time
         Double_t tdc = sig->MBD( MAX_SAMP );
-        f_adc[ich] = sig->GetSplineAmpl();
+        f_q[pmtch] = sig->GetSplineAmpl();
 
-        if ( f_adc[ich]<20 )
+        if ( f_q[pmtch]<20 )
         {
-          f_t0[ich] = -9999.;
+          f_tt[pmtch] = -9999.;
         }
         else
         {
@@ -217,48 +252,19 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
 //chiu Skip for now
           //f_t0[ich] = tdc2time[ich]->Eval( tdc );
  
-          f_t0[ich] = tdc*0.00189;  // simple linear correction
+          f_tt[ich] = 12.0 - tdc*0.00189;  // simple linear correction
         }
 
         /*
         if ( ievt<10 && ich==0)
         {
-          cout << "mbdtcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_adc[ich] << endl;
+          cout << "mbdtcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_q[ich] << endl;
         }
         */
 
       }
 
-      // Here we dump the output to csv file
-/*chiu SKIP FOR NOW
-      if ( ich>=16 && ich<24 && f_t0[ich-16]>-100 && f_t0[ich-16]<31 )
-      {
-        csv_timefile << f_evt << "," << ich-16 << ",";
-        csv_chfile << f_evt << "," << ich-16 << ",";
-
-        // Save the charge pulse
-        DigSig *sig = digana.GetSig(ich-16);
-        TGraphErrors *g = sig->GetGraph();
-        Double_t *yval = g->GetY();
-        for (int ix=0; ix<g->GetN(); ix++)
-        {
-          csv_timefile << yval[ix] << ",";
-        }
-
-        // Save the charge pulse
-        sig = digana.GetSig(ich);
-        g = sig->GetGraph();
-        yval = g->GetY();
-        for (int ix=0; ix<g->GetN(); ix++)
-        {
-          csv_chfile << yval[ix] << ",";
-        }
-
-        csv_timefile<< f_t0[ich-16] << endl;
-        csv_chfile<< f_adc[ich] << endl;
-      }
-*/
-
+      /*
       if ( verbose )
       {
         ac->cd(ich+1);
@@ -271,7 +277,22 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         line[ich].SetY1(1);
         line[ich].Draw("same");
       }
+      */
     }
+
+    // calculate bbc global variables
+    for (int ipmt=0; ipmt<NPMT; ipmt++)
+    {
+      int arm = ipmt/64;
+
+      if ( f_q[ipmt] > 20 )
+      {
+        f_bq[arm] += f_q[ipmt];
+        f_bn[arm] += 1;
+      }
+
+    }
+
 
     if ( verbose )
     {
@@ -282,9 +303,9 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
     if ( verbose )
     {
       cout << "Event " << ievt << "\t";
-      for (int ich=0; ich<NCH; ich++)
+      for (int ipmt=0; ipmt<NPMT; ipmt++)
       {
-        cout << f_t0[ich] << "\t";
+        cout << f_tt[ipmt] << "\t";
       }
       cout << endl;
     }
@@ -302,12 +323,6 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         ac->SaveAs(name);
       }
     }
-  }
-
-  if ( csv_chfile.good() )
-  {
-    csv_timefile.close();
-    csv_chfile.close();
   }
 
   savefile->Write();
