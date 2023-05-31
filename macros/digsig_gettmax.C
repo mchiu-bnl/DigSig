@@ -12,16 +12,21 @@
 
 #include "get_runstr.h"
 
-TH1 *h_tmax[128]; // [pmt ch], max sample in event
+TH1 *h_tmax[256]; // [feech], max sample in event
 TH2 *h2_tmax[2];  // [0 == time ch, 1 == chg ch], max sample in evt vs ch
 TH2 *h2_wave[2];  // [0 == time ch, 1 == chg ch], all samples in evt vs ch
-TH2 *h2_trange;   // adc at maxsamp vs ch
+TH2 *h2_trange_raw;   // raw tdc at maxsamp vs ch
+TH2 *h2_trange;       // subtracted tdc at maxsamp vs ch
+TH1 *h_trange[2];     // subtracted tdc at maxsamp, [S/N]
 
-const int trigsamp = 3;
+int TRIGSAMP = 11;
+//int TRIGSAMP = 17;
 
 
 int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
 {
+  gStyle->SetOptStat(0);
+
   TString name;
   TString title;
   TFile *tfile = new TFile(fname,"READ");
@@ -67,7 +72,7 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
   savefname.ReplaceAll(".root","_tmax.root");
   TFile *savefile = new TFile(savefname,"RECREATE");
 
-  for (int ich=0; ich<128; ich++)
+  for (int ich=0; ich<NCH; ich++)
   {
     name = "h_tmax"; name += ich;
     h_tmax[ich] = new TH1F(name,name,NSAMPLES,-0.5,NSAMPLES-0.5);
@@ -79,7 +84,8 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
   h2_wave[0] = new TH2F("h2_twave","time adc vs ch",NSAMPLES,-0.5,NSAMPLES-0.5,128,0,128);
   h2_wave[1] = new TH2F("h2_qwave","chg adc vs ch",NSAMPLES,-0.5,NSAMPLES-0.5,128,0,128);
 
-  h2_trange = new TH2F("h2_trange","tadc at trig samp vs ch",1600,0,16384,128,0,128);
+  h2_trange_raw = new TH2F("h2_trange_raw","tadc (raw) at trig samp vs ch",1600,0,16384,128,0,128);
+  h2_trange = new TH2F("h2_trange","tadc at trig samp vs ch",1638,-100,16280,128,0,128);
 
   for (int itype=0; itype<2; itype++)
   {
@@ -128,10 +134,30 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
         }
       }
 
-      h_tmax[pmtch]->Fill( maxsamp );
+      h_tmax[ich]->Fill( maxsamp );
       h2_tmax[tq]->Fill( maxsamp, pmtch );
 
-      h2_trange->Fill( ch[ich][trigsamp] , pmtch );
+      if ( tq==0 && ievt>100 )
+      { 
+        h2_trange_raw->Fill( ch[ich][TRIGSAMP] , pmtch );
+        float tdc = ch[ich][TRIGSAMP] - ch[ich][0];
+        float adc = ch[ich+8][TRIGSAMP] - ch[ich+8][0];
+        h2_trange->Fill( tdc , pmtch );
+        /*
+        if ( tdc>30 && tdc < 1000 )
+        {
+            cout << evt << "\t" << ich << "\t" << pmtch << "\t" << tdc << "\t" << adc << endl;
+        }
+        */
+      }
+    }
+
+    if ( ievt==100 )
+    {
+      TH1 *h_trigsamp = h2_tmax[0]->ProjectionX("h_trigsamp");
+      int maxbin = h_trigsamp->GetMaximumBin();
+      TRIGSAMP = h_trigsamp->GetBinCenter( maxbin );
+      cout << "TRIGSAMP " << TRIGSAMP << endl;
     }
 
     evt_processed++;
@@ -140,6 +166,10 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
   h2_wave[0]->Scale(1.0/evt_processed);
   h2_wave[1]->Scale(1.0/evt_processed);
 
+  name = "h_trange0";
+  h_trange[0] = h2_trange->ProjectionX(name,1,64);
+  name = "h_trange1";
+  h_trange[1] = h2_trange->ProjectionX(name,65,128);
 
   TString dir = "results/";
   dir += get_runstr(fname);
@@ -175,9 +205,23 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
   //ttrange
   ac[4] = new TCanvas("c_trange","trange",425*1.5,550*1.5);
   h2_trange->Draw("colz");
+  gPad->SetLogz(1);
   name = dir + "trange.png";
   cout << name << endl;
   ac[4]->Print( name );
+
+  //ttrange by arm
+  ac[5] = new TCanvas("c_trange_ns","trange by arm",550*1.5,425*1.5);
+  ac[5]->Divide(1,2);
+  h_trange[0]->Draw();
+  h_trange[1]->SetLineColor(kBlue);
+  h_trange[1]->Draw("same");
+  gPad->SetLogy(1);
+  gPad->Modified();
+  gPad->Update();
+  name = dir + "trange_byarm.png";
+  cout << name << endl;
+  ac[5]->Print( name );
 
   savefile->Write();
 

@@ -12,8 +12,9 @@
 #include <fstream>
 #include <vector>
 
-const int MAXRUNS = 11;
+const int MAXRUNS = 100;    // 11 is the typical
 const int MAXCH = 256;
+const int NUMPMT = 128;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
 int NCH;                 // total number of channels (including charge channels)
 int NBOARDS;
@@ -40,29 +41,32 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   cout << "tfname " << tfname << endl;
 
   // Book Histograms, etc
-  for (int ich=0; ich<NCH; ich++)
+  for (int ich=0; ich<NUMPMT; ich++)
   {
     name = "h_laseramp"; name += ich; name += "_"; name += nrun;
     title = name;
-    h_laseramp[nrun][ich] = new TH1F(name,title,1610,-100,16000);
+    h_laseramp[nrun][ich] = new TH1F(name,title,1620,-100,16100);
     //h_laseramp[nrun][ich] = new TH1F(name,title,160,0,16000);
   }
 
   Int_t   evt;
-  Float_t t[MAXCH];  // time
-  Float_t ch[MAXCH]; // voltage
+  Float_t f_tt[MAXCH];  // time, t-ch
+  Float_t f_tq[MAXCH];  // time, q-ch
+  Float_t f_q[MAXCH];   // charge
 
   cout << "tfname " << tfname << endl;
 
   TFile *tfile = new TFile(tfname,"READ");
   TTree *tree = (TTree*)tfile->Get("t");
   tree->SetBranchAddress("evt",&evt);
-  for (int ich=0; ich<NCH; ich++)
+  for (int ich=0; ich<NUMPMT; ich++)
   {
-    name = "t"; name += ich;
-    tree->SetBranchAddress(name,&t[ich]);
-    name = "ch"; name += ich;
-    tree->SetBranchAddress(name,&ch[ich]);
+    name = "tt"; name += ich;
+    tree->SetBranchAddress(name,&f_tt[ich]);
+    name = "tq"; name += ich;
+    tree->SetBranchAddress(name,&f_tq[ich]);
+    name = "q"; name += ich;
+    tree->SetBranchAddress(name,&f_q[ich]);
   }
 
   int nentries = tree->GetEntries();
@@ -70,22 +74,28 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   {
     tree->GetEntry(ientry);
 
-    for (int ich=0; ich<NCH; ich++)
+    for (int ich=0; ich<NUMPMT; ich++)
     {
-      //cout << evt << "\t" << t[1] << "\t" << ch[1] << "\t" << t[14] << "\t" << ch[14] << endl;
-      h_laseramp[nrun][ich]->Fill( ch[ich] );
+      //cout << evt << "\t" << t[1] << "\t" << f_q[1] << "\t" << t[14] << "\t" << f_q[14] << endl;
+      h_laseramp[nrun][ich]->Fill( f_q[ich] );
     }
   }
 
   // Fit gaussians to get the average amplitude
-  for (int ich=0; ich<NCH; ich++)
+  for (int ich=0; ich<NUMPMT; ich++)
   {
     //cout << "Fitting ch " << ich << endl;
     name = "fgaus"; name += ich; name += "_"; name += nrun;
     fgaus[nrun][ich] = new TF1(name,"gaus",-100,16000);
-    fgaus[nrun][ich]->SetLineColor(4);
-    fgaus[nrun][ich]->SetParameters(1000,10000,10);
-    h_laseramp[nrun][ich]->Fit( fgaus[nrun][ich], "NQR" );
+    fgaus[nrun][ich]->SetLineColor(2);
+
+    h_laseramp[nrun][ich]->Rebin(20);
+    double seed_mean = h_laseramp[nrun][ich]->GetMean();
+    double seed_rms = h_laseramp[nrun][ich]->GetRMS();
+    fgaus[nrun][ich]->SetParameters(1000,seed_mean,seed_rms);
+    fgaus[nrun][ich]->SetRange( seed_mean-1.5*seed_rms, seed_mean+1.5*seed_rms );
+    h_laseramp[nrun][ich]->Fit( fgaus[nrun][ich], "QR" );
+    //h_laseramp[nrun][ich]->Fit( fgaus[nrun][ich], "LLRQ" );
 
     float ampl = fgaus[nrun][ich]->GetParameter(1);
     float amplerr = fgaus[nrun][ich]->GetParError(1);
@@ -104,38 +114,51 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
       c_laseramp[icv]->Divide(8,4);
     }
 
-    for (int ich=0; ich<NCH; ich++)
+    for (int ipmt=0; ipmt<NUMPMT; ipmt++)
     {
-      int sn = ich/128;     // south or north
-      int quad = ich/64;    // quadrant
-      int ch = (ich/16)*8 + ich%8;
-      int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
-      if ( tq==1 )  // charge channel
-      {
-        //c_laseramp[quad]->cd( ch%32 + 1 );
-        //h_laseramp[nrun][ich]->Draw();
-      }
-      else          // time channel
-      {
-        c_laseramp[quad]->cd( ch%32 + 1 );
-        //h_laseramp[nrun][ich]->Rebin(100);
-        h_laseramp[nrun][ich]->Draw();
-        /*
-        gPad->SetLogy(1);
-        gPad->Modified();
-        gPad->Update();
-        */
-      }
+      int quad = ipmt/32;    // quadrant
+      c_laseramp[quad]->cd( ipmt%32 + 1 );
+      //h_laseramp[nrun][ipmt]->Rebin(100);
+      h_laseramp[nrun][ipmt]->Draw();
+      /*
+      gPad->SetLogy(1);
+      gPad->Modified();
+      gPad->Update();
+      */
     }
 
   }
 
 }
 
+float prev_ampl[NUMPMT];
+
+void get_prev_gains(const char *prev_gains_file = "gains_at_9_zerofield.out")
+{
+    ifstream infile( prev_gains_file );
+    int ch;
+    float hvscale;
+    float ratio;
+    while ( infile >> ch >> hvscale >> ratio )
+    {
+        if ( ch>=0 && ch<128 )
+        {
+          infile >> prev_ampl[ch];
+          cout << ch << "\t" << endl;
+        }
+        else
+        {
+          cout << "Bad ch" << endl;
+        }
+    }
+}
+
 void analaserscan(const char *fname = "hvscan.62880")
 {
   NCH = MAXCH;                 // total number of channels (including charge channels)
   NBOARDS = MAXBOARDS;
+
+  get_prev_gains();
 
   // Get the number of actual channels to process
   ifstream configfile("digsig.cfg");
@@ -151,17 +174,20 @@ void analaserscan(const char *fname = "hvscan.62880")
 
   TString rootfname;
   ifstream scanfile(fname);
-  for (int irun=0; irun<MAXRUNS; irun++)
+  int nruns = 0;
+  while ( scanfile >> run_number[nruns] >> hvscale[nruns] )
   {
-    scanfile >> run_number[irun] >> hvscale[irun];
-    cout << run_number[irun] << "\t" << hvscale[irun] << endl;
+    cout << run_number[nruns] << "\t" << hvscale[nruns] << endl;
 
     // get name of root file
-    rootfname = "prdf_"; rootfname += run_number[irun]; rootfname += "_times.root";
+    rootfname.Form( "calib_mbd-%08d-0000_times.root", run_number[nruns] );
     cout << "Processing " << rootfname << endl;
 
-    anafile( rootfname, irun );
+    anafile( rootfname, nruns );
+ 
+    nruns++;
   }
+  cout << "Processed " << nruns << " runs" << endl;
 
   // Make the canvases for the gain curves
   const int NCANVAS = 4;
@@ -176,43 +202,49 @@ void analaserscan(const char *fname = "hvscan.62880")
   // Make and draw the gain curves, and
   // write out the HV scale needed to get XX gain
   ofstream gainfile("gains.out");
-  float gain_wanted = 0.1;
-  for (int ich=0; ich<NCH; ich++)
+  ofstream gain9file("gains_at_9.out");
+  float gain_wanted = 0.55;
+  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
   {
-    int sn = ich/128;   // south or north
-    int quad = ich/64;  // quadrant
-    int pmtch = (ich/16)*8 + ich%8;    // pmt channel
+    int quad = ipmt/32;  // quadrant
 
     // Create the TGraph with the summary results
-    name = "g_laserscan"; name += ich;
-    title = "ch "; name += pmtch;
-    g_laserscan[ich] = new TGraphErrors(MAXRUNS,hvscale,laseramp[ich],0,laseramperr[ich]);
-    g_laserscan[ich]->SetName(name);
-    g_laserscan[ich]->SetTitle(title);
-    g_laserscan[ich]->SetMarkerStyle(20);
-    g_laserscan[ich]->SetMarkerSize(0.5);
+    name = "g_laserscan"; name += ipmt;
+    title = "ch "; title += ipmt;
+    g_laserscan[ipmt] = new TGraphErrors(nruns,hvscale,laseramp[ipmt],0,laseramperr[ipmt]);
+    g_laserscan[ipmt]->SetName(name);
+    g_laserscan[ipmt]->SetTitle(title);
+    g_laserscan[ipmt]->SetMarkerStyle(20);
+    g_laserscan[ipmt]->SetMarkerSize(0.5);
 
-    int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
+    //cout << "ch " << pmtch << endl;
+    c_laserscan[quad]->cd( ipmt%32 + 1 );
+    g_laserscan[ipmt]->Draw("acp");
+    g_laserscan[ipmt]->GetHistogram()->SetTitleSize(4);
 
-    // only look at charge channels
-    if ( tq==1 )
+    // now step down until we find the gain we want
+    double maxgain = g_laserscan[ipmt]->Eval(1.0);
+
+    float gain9 = g_laserscan[ipmt]->Eval(0.9)/maxgain;
+    gain9file << ipmt << "\t" << 0.9 << "\t" << gain9 << "\t" << g_laserscan[ipmt]->Eval(0.9) << endl;
+
+    for (double iv=0.5; iv<1.0; iv+=0.001)
     {
-      //cout << "ch " << pmtch << endl;
-      c_laserscan[quad]->cd( pmtch%32 + 1 );
-      g_laserscan[ich]->Draw("acp");
-      g_laserscan[ich]->GetHistogram()->SetTitleSize(4);
-
-      // now step down until we find the gain we want
-      double maxgain = g_laserscan[ich]->Eval(1.0);
-      for (double iv=0.5; iv<1.0; iv+=0.001)
-      {
-        double ratio = g_laserscan[ich]->Eval(iv)/maxgain;
-        if ( ratio>0.1 )
+        double ampl = g_laserscan[ipmt]->Eval(iv);
+        /*
+        double ratio = g_laserscan[ipmt]->Eval(iv)/maxgain;
+        if ( ratio>gain_wanted )
         {
-          gainfile << pmtch << "\t" << iv << "\t" << ratio << endl;
-          break;
+            gainfile << ipmt << "\t" << iv << "\t" << ratio << endl;
+            break;
         }
-      }
+        */
+
+        if ( ampl > prev_ampl[ipmt] )
+        {
+            gainfile << ipmt << "\t" << iv << "\t" << ampl/prev_ampl[ipmt] << endl;
+            break;
+        }
     }
   }
 

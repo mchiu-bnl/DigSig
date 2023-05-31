@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# prdf2root <fname>
-# convert prdf files to root
+# root2mbd <fname>
+# convert digsig root files to MBD info
 # <fname> can be a run and setting text file,
 # or it can be a prdf
 
@@ -31,7 +31,7 @@ else
     echo "Processing $fname"
 	cat $fname | while read run setting
 	do
-	    rootf=`printf "prdf_%d.root" $run`
+	    rootf=`printf "calib_mbd-%d.root" $run`
 	    echo $run $setting $rootf
 	    echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
 	    root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)

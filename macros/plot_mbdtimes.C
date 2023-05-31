@@ -17,21 +17,24 @@
 const int MAXRUNS = 11;
 const int MAXCH = 256;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
-int NCH;                 // total number of channels (including charge channels)
+int NUMPMT = 128;        // number of PMTs
+int NCH = MAXCH;                 // total number of channels (including charge channels)
 int NBOARDS;
 
-TH1 *h_laseramp[MAXRUNS][MAXCH];    //[run][ch] 
+TH1 *h_ampl[MAXRUNS][MAXCH];    //[run][ch] 
 TF1 *fgaus[MAXRUNS][MAXCH];
 int nrun = 0;
 int run_number[MAXRUNS];
-float hvscale[MAXRUNS];
-float laseramp[MAXCH][MAXRUNS];
-float laseramperr[MAXCH][MAXRUNS];
+float f_peak[MAXCH][MAXRUNS];
+float f_peakerr[MAXCH][MAXRUNS];
 TGraphErrors *g_laserscan[MAXCH];
 
 TH1 *h_qsum[2]; // [arm]
+TH2 *h2_tt[MAXRUNS];     // time in t-ch
+TH2 *h2_tq[MAXRUNS];     // time in q-ch
+TH2 *h2_q[MAXRUNS];      // charge
 
-const int verbose = 1;
+const int verbose = 0;
 
 TString name;
 TString title;
@@ -48,7 +51,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   {
     name = "h_bbc"; name += ich; name += "_"; name += nrun;
     title = name;
-    h_laseramp[nrun][ich] = new TH1F(name,title,1610,-100,16000);
+    h_ampl[nrun][ich] = new TH1F(name,title,1610,-100,16000);
   }
 
   for (int iarm=0; iarm<2; iarm++)
@@ -58,22 +61,31 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     h_qsum[iarm] = new TH1F(name, title,1600,0,16000);
   }
 
-  Int_t   evt;
-  Float_t tt[NUMPMT];  // time from t-channels
-  Float_t tq[NUMPMT];  // time from q-channels
-  Float_t ch[NUMPMT];  // voltage
+  name = "h2_tt"; name += nrun;
+  h2_tt[nrun] = new TH2F(name,name,300,-15.,15.,NUMPMT,-0.5,NUMPMT-0.5);
+  name = "h2_tq"; name += nrun;
+  h2_tq[nrun] = new TH2F(name,name,300,-15.,15.,NUMPMT,-0.5,NUMPMT-0.5);
+  name = "h2_q"; name += nrun;
+  h2_q[nrun] = new TH2F(name,name,4096,-100.,16384.,NUMPMT,-0.5,NUMPMT-0.5);
+
+  Int_t   f_evt;
+  Float_t f_tt[NUMPMT];  // time from t-channels
+  Float_t f_tq[NUMPMT];  // time from q-channels
+  Float_t f_q[NUMPMT];  // voltage
 
   cout << "tfname " << tfname << endl;
 
   TFile *tfile = new TFile(tfname,"READ");
   TTree *tree = (TTree*)tfile->Get("t");
-  tree->SetBranchAddress("evt",&evt);
-  for (int ich=0; ich<NCH; ich++)
+  tree->SetBranchAddress("evt",&f_evt);
+  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
   {
-    name = "tt"; name += ich;
-    tree->SetBranchAddress(name,&t[ich]);
-    name = "q"; name += ich;
-    tree->SetBranchAddress(name,&ch[ich]);
+    name = "tt"; name += ipmt;
+    tree->SetBranchAddress(name,&f_tt[ipmt]);
+    name = "tq"; name += ipmt;
+    tree->SetBranchAddress(name,&f_tq[ipmt]);
+    name = "q"; name += ipmt;
+    tree->SetBranchAddress(name,&f_q[ipmt]);
   }
 
   int nentries = tree->GetEntries();
@@ -89,19 +101,24 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
       int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
 
       //cout << evt << "\t" << t[1] << "\t" << ch[1] << "\t" << t[14] << "\t" << ch[14] << endl;
+      h2_tt[nrun]->Fill( f_tt[ich], pmtch );
+      h2_tq[nrun]->Fill( f_tq[ich], pmtch );
+      h2_q[nrun]->Fill( f_q[ich], pmtch );
+      
       if ( tq == 1 )    // charge channel
       {
-        h_laseramp[nrun][ich]->Fill( ch[ich] );
-        if ( t[ich]>8&&t[ich]<16 ) h_qsum[sn]->Fill( ch[ich] );
+        h_ampl[nrun][ich]->Fill( f_q[ich] );
+        if ( f_tt[ich]>8 && f_tt[ich]<16 ) h_qsum[sn]->Fill( f_q[ich] );
       }
       else
       {
-        if ( ch[ich]>200 ) h_laseramp[nrun][ich]->Fill( ch[ich] );
+        if ( f_q[ich]>200 ) h_ampl[nrun][ich]->Fill( f_q[ich] );
       }
     }
   }
 
   // Fit gaussians to get the average amplitude
+  /*
   for (int ich=0; ich<NCH; ich++)
   {
     //cout << "Fitting ch " << ich << endl;
@@ -109,27 +126,30 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     fgaus[nrun][ich] = new TF1(name,"gaus",-100,16000);
     fgaus[nrun][ich]->SetLineColor(4);
     fgaus[nrun][ich]->SetParameters(1000,10000,10);
-    h_laseramp[nrun][ich]->Fit( fgaus[nrun][ich], "NQR" );
+    h_ampl[nrun][ich]->Fit( fgaus[nrun][ich], "NQR" );
 
-    float ampl = fgaus[nrun][ich]->GetParameter(1);
-    float amplerr = fgaus[nrun][ich]->GetParError(1);
-    laseramp[ich][nrun] = ampl;
-    laseramperr[ich][nrun] = amplerr;
+    f_peak[ich][nrun] = fgaus[nrun][ich]->GetParameter(1);
+    f_peakerr[ich][nrun] = fgaus[nrun][ich]->GetParError(1);
   }
+  */
 
   // Draw time and charge distributions
   const int NCANVAS = 4;
   TCanvas *c_charge[NCANVAS];
   TCanvas *c_time[NCANVAS];
-  for (int icv = 0; icv<NCANVAS; icv++)
-  {
-    name = "c_charge"; name += icv;
-    c_charge[icv] = new TCanvas(name,name,1600,800);
-    c_charge[icv]->Divide(8,4);
 
-    name = "c_time"; name += icv;
-    c_time[icv] = new TCanvas(name,name,1600,800);
-    c_time[icv]->Divide(8,4);
+  if ( verbose )
+  {
+    for (int icv = 0; icv<NCANVAS; icv++)
+    {
+      name = "c_charge"; name += icv;
+      c_charge[icv] = new TCanvas(name,name,1600,800);
+      c_charge[icv]->Divide(8,4);
+
+      name = "c_time"; name += icv;
+      c_time[icv] = new TCanvas(name,name,1600,800);
+      c_time[icv]->Divide(8,4);
+    }
   }
 
   for (int ich=0; ich<NCH; ich++)
@@ -138,43 +158,72 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     int quad = ich/64;    // quadrant
     int pmtch = (ich/16)*8 + ich%8;  // pmtch
     int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
-    if ( tq==1 )  // charge channel
+
+    if ( verbose )
     {
-      c_charge[quad]->cd( pmtch%32 + 1 );
-      h_laseramp[nrun][ich]->Draw();
-      h_laseramp[nrun][ich]->Rebin(10);
-      gPad->SetLogy(1);
-    }
-    else          // time channel
-    {
-      c_time[quad]->cd( pmtch%32 + 1 );
-      h_laseramp[nrun][ich]->Draw();
-      h_laseramp[nrun][ich]->Rebin(10);
-      //gPad->SetLogy(1);
+      if ( tq==1 )  // charge channel
+      {
+        c_charge[quad]->cd( pmtch%32 + 1 );
+        h_ampl[nrun][ich]->Draw();
+        h_ampl[nrun][ich]->Rebin(10);
+        gPad->SetLogy(1);
+      }
+      else          // time channel
+      {
+        c_time[quad]->cd( pmtch%32 + 1 );
+        h_ampl[nrun][ich]->Draw();
+        h_ampl[nrun][ich]->Rebin(10);
+        //gPad->SetLogy(1);
+      }
     }
   }
 
   TString dir = "results/";
-  dir += get_runstr(fname);
+  dir += get_runstr(tfname);
   dir += "/";
-  //name = "mkdir -p " + dir;
-  gSystem->MakeDirectory( dir );
-  //name = "cd " + dir;
-  gSystem->ChangeDirectory( dir );
+  name = "mkdir -p " + dir;
+  gSystem->Exec( name );
+  //gSystem->MakeDirectory( dir );
+  name = "cd " + dir;
+  gSystem->Exec( name );
+  //gSystem->ChangeDirectory( dir );
 
   // Save the canvases
-  for (int icv = 0; icv<NCANVAS; icv++)
+  if ( verbose )
   {
-    c_charge[icv]->SaveAs( ".png" );
-    c_time[icv]->SaveAs( ".png" );
+    for (int icv = 0; icv<NCANVAS; icv++)
+    {
+      c_charge[icv]->SaveAs( ".png" );
+      c_time[icv]->SaveAs( ".png" );
+    }
   }
 
-  TCanvas *ac = new TCanvas("ac","ac",800,400);
+  TCanvas *ac[100];
+  int icvs = 0;
+  ac[icvs] = new TCanvas("c_tt","time in t-ch",800,400);
+  h2_tt[nrun]->Draw("colz");
+  name = dir + "h2_tt.png";
+  ac[icvs]->SaveAs( name );
+  icvs++;
+  ac[icvs] = new TCanvas("c_tq","time in q-ch",800,400);
+  h2_tq[nrun]->Draw("colz");
+  name = dir + "h2_tq.png";
+  ac[icvs]->SaveAs( name );
+  icvs++;
+  ac[icvs] = new TCanvas("c_q","charge in pmt",800,400);
+  h2_q[nrun]->Draw("colz");
+  name = dir + "h2_q.png";
+  ac[icvs]->SaveAs( name );
+  icvs++;
+  /*
+  ac[icvs] = new TCanvas("ac","ac",800,400);
   h_qsum[0]->Draw();
-  ac->SaveAs( ".png" )
-  TCanvas *bc = new TCanvas("bc","bc",800,400);
+  ac[icvs]->SaveAs( ".png" );
+  icvs++;
+  ac[icvs] = new TCanvas("c_qsum","bc",800,400);
   h_qsum[1]->Draw();
-  bc->SaveAs( ".png" )
+  bc->SaveAs( ".png" );
+  */
 
 }
 
@@ -201,5 +250,5 @@ void plot_mbdtimes(const char *fname = "prdf.root")
     rootfname = fname;
     cout << "Processing " << rootfname << endl;
 
-    anafile( rootfname );
+    anafile( rootfname, 0 );
 }

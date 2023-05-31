@@ -17,13 +17,12 @@ const int MAXCH = 256;
 const int NPMT = 128;
 //const int NSAMP = 20;
 const int NSAMP = 31;
-int NCH;    // number of ch's to process
+int NCH = MAXCH;    // number of ch's to process
 
 TString template_fname = "TEMPLATES/sig_gen0";
 //TString template_fname = "TEMPLATES/sig_gen2";
 
-const int verbose = 0;
-//TH1 *htdiff[NCH];
+int verbose = 0;
 
 Int_t   f_evt;
 Short_t f_bn[2];  // number of hit PMTs, [arm]
@@ -36,11 +35,14 @@ Float_t f_tq[NPMT];  // time from q-channel
 Float_t f_q[NPMT];   // charge
 
 int time_method[MAXCH];
-//const int MAX_SAMP = 6;     // use this sample to get the MBD time
-//const int MAX_SAMP = 9;     // use this sample to get the MBD time
-//const int MAX_SAMP = 9;     // use this sample to get the MBD time
-//const int MAX_SAMP = 14;     // use this sample to get the MBD time
-const int MAX_SAMP = 3;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 6;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 9;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 9;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 14;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 5;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 11;     // use this sample to get the MBD time
+const int TRIG_SAMP = 17;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 10;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
 void set_time_method()
@@ -90,7 +92,7 @@ void reset_event()
   }
 }
 
-int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
+int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", const int nevents = 0)
 {
   gSystem->Load("libdigsig.so");
   //Float_t f_evt;
@@ -208,6 +210,16 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
       int pmtch = (ich/16)*8 + ich%8;
       int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
 
+      if ( pmtch == 127 )
+      {
+        verbose = 1;
+      }
+
+      if ( ievt==4 )
+      {
+        cout << "ich\t" << ich << "\t" << pmtch << "\t" << verbose << "\t" << time_method[ich] << endl;
+      }
+
       if ( time_method[ich] == 1 ) // Use Template fit to get time
       {
         sig->FitTemplate();
@@ -221,16 +233,21 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         Double_t threshold = 0.5;
         sig->GetSplineAmpl();
         f_tq[pmtch] = sig->dCFD( threshold );
+        if ( verbose && ievt < 20 )
+        {
+          cout << "tq" << pmtch << "(" << ich << ")\t" << f_tq[pmtch] << "\t" << f_q[pmtch] << endl;
+        }
+        f_tq[pmtch] = f_tq[pmtch] - (TRIG_SAMP-3);
         f_tq[pmtch] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
         f_q[pmtch] = sig->GetAmpl();
-        if ( f_q[pmtch]<20 )
+        if ( f_q[pmtch]<24 )
         {
           f_tq[pmtch] = -9999.;
         }
 
-        if ( ievt<10 && ich==8)
+        if ( ievt<10 && ich==255)
         {
-          cout << "dcfdcalc " << ievt << "\t" << ich << "\t" << f_tq[ich] << "\t" << f_q[ich] << endl;
+          cout << "dcfdcalc " << ievt << "\t" << ich << "\t" << pmtch << "\t" << f_tq[pmtch] << "\t" << f_q[pmtch] << endl;
         }
       }
       else if ( time_method[ich] == 2 ) // Use MBD method to get time
@@ -238,27 +255,20 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         //Double_t threshold = 4.0*sig->GetPed0RMS();
         //
         Double_t threshold = 0.5;
-        //const int MAX_SAMP = 8;     // use this sample to get the time
-        Double_t tdc = sig->MBD( MAX_SAMP );
+        Double_t tdc = sig->MBD( TRIG_SAMP );
         f_q[pmtch] = sig->GetSplineAmpl();
 
-        if ( f_q[pmtch]<20 )
-        {
-          f_tt[pmtch] = -9999.;
-        }
-        else
-        {
-          // Convert TDC to ns
+        // Convert TDC to ns
 //chiu Skip for now
-          //f_t0[ich] = tdc2time[ich]->Eval( tdc );
+        //f_t0[ich] = tdc2time[ich]->Eval( tdc );
  
-          f_tt[ich] = 12.0 - tdc*0.00189;  // simple linear correction
-        }
+        f_tt[pmtch] = 12.5 - tdc*0.00189;  // simple linear correction
 
         /*
         if ( ievt<10 && ich==0)
         {
-          cout << "mbdtcalc " << ievt << "\t" << ich << "\t" << f_t0[ich] << "\t" << f_q[ich] << endl;
+          cout << "mbdtcalc " << ievt << "\t" << ich << "\t" << f_tt[pmtch]
+            << "\t" << f_tq[pmtch] << "\t" << f_q[pmtch] << endl;
         }
         */
 
@@ -278,6 +288,11 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
         line[ich].Draw("same");
       }
       */
+
+      if ( pmtch==127 )
+      {
+        verbose = 0;
+      }
     }
 
     // calculate bbc global variables
@@ -300,15 +315,21 @@ int digsig_calc_mbd(const char *rootfname = "drs4.root", const int nevents = 0)
       gPad->Update();
     }
 
-    if ( verbose )
+    //if ( verbose )
+    if ( ievt == 4 )
     {
-      cout << "Event " << ievt << "\t";
+      cout << "Event " << ievt << "\n0:\t";
       for (int ipmt=0; ipmt<NPMT; ipmt++)
       {
         cout << f_tt[ipmt] << "\t";
+        if ( ipmt%8 == 7 )
+        {
+          cout << endl << ipmt << ":\t";
+        }
       }
       cout << endl;
-    }
+
+    }   // End of event
 
     tree->Fill();
 
