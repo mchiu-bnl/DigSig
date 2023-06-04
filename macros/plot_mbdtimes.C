@@ -1,5 +1,5 @@
 //
-// Plots the charge and time distributions from the *_times.root file
+// Plots the charge and time distributions from the *_mbd.root (or *_times.root) file
 //
 #include <TH1.h>
 #include <TF1.h>
@@ -17,8 +17,8 @@
 const int MAXRUNS = 11;
 const int MAXCH = 256;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
-int NUMPMT = 128;        // number of PMTs
-int NCH = MAXCH;                 // total number of channels (including charge channels)
+int NUMPMT = 128;                   // number of PMTs
+int NCH = MAXCH;                    // total number of channels (including charge channels)
 int NBOARDS;
 
 TH1 *h_ampl[MAXRUNS][MAXCH];    //[run][ch] 
@@ -47,7 +47,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   cout << "tfname " << tfname << endl;
 
   // Book Histograms, etc
-  for (int ich=0; ich<NCH; ich++)
+  for (int ich=0; ich<NUMPMT; ich++)
   {
     name = "h_bbc"; name += ich; name += "_"; name += nrun;
     title = name;
@@ -93,27 +93,19 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   {
     tree->GetEntry(ientry);
 
-    for (int ich=0; ich<NCH; ich++)
+    for (int ipmt=0; ipmt<NUMPMT; ipmt++)
     {
-      int sn = ich/128;     // south or north
-      int quad = ich/64;    // quadrant
-      int pmtch = (ich/16)*8 + ich%8;
-      int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
+      int sn = ipmt/64;     // south or north
+      int quad = ipmt/32;    // quadrant
 
       //cout << evt << "\t" << t[1] << "\t" << ch[1] << "\t" << t[14] << "\t" << ch[14] << endl;
-      h2_tt[nrun]->Fill( f_tt[ich], pmtch );
-      h2_tq[nrun]->Fill( f_tq[ich], pmtch );
-      h2_q[nrun]->Fill( f_q[ich], pmtch );
+      h2_tt[nrun]->Fill( f_tt[ipmt], ipmt );
+      h2_tq[nrun]->Fill( f_tq[ipmt], ipmt );
+      h2_q[nrun]->Fill( f_q[ipmt], ipmt );
       
-      if ( tq == 1 )    // charge channel
-      {
-        h_ampl[nrun][ich]->Fill( f_q[ich] );
-        if ( f_tt[ich]>8 && f_tt[ich]<16 ) h_qsum[sn]->Fill( f_q[ich] );
-      }
-      else
-      {
-        if ( f_q[ich]>200 ) h_ampl[nrun][ich]->Fill( f_q[ich] );
-      }
+      h_ampl[nrun][ipmt]->Fill( f_q[ipmt] );
+      if ( f_tt[ipmt]>8 && f_tt[ipmt]<16 ) h_qsum[sn]->Fill( f_q[ipmt] );
+      if ( f_q[ipmt]>200 ) h_ampl[nrun][ipmt]->Fill( f_q[ipmt] );
     }
   }
 
@@ -152,29 +144,22 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     }
   }
 
-  for (int ich=0; ich<NCH; ich++)
+  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
   {
-    int sn = ich/128;     // south or north
-    int quad = ich/64;    // quadrant
-    int pmtch = (ich/16)*8 + ich%8;  // pmtch
-    int tq = (ich/8)%2;   // 0 = T-channel, 1 = Q-channel
+    int sn = ipmt/64;     // south or north
+    int quad = ipmt/32;    // quadrant
 
     if ( verbose )
     {
-      if ( tq==1 )  // charge channel
-      {
-        c_charge[quad]->cd( pmtch%32 + 1 );
-        h_ampl[nrun][ich]->Draw();
-        h_ampl[nrun][ich]->Rebin(10);
+        c_charge[quad]->cd( ipmt%32 + 1  );
+        h_ampl[nrun][ipmt]->Draw();
+        h_ampl[nrun][ipmt]->Rebin(10);
         gPad->SetLogy(1);
-      }
-      else          // time channel
-      {
-        c_time[quad]->cd( pmtch%32 + 1 );
-        h_ampl[nrun][ich]->Draw();
-        h_ampl[nrun][ich]->Rebin(10);
+
+        c_time[quad]->cd( ipmt%32 + 1 );
+        h_ampl[nrun][ipmt]->Draw();
+        h_ampl[nrun][ipmt]->Rebin(10);
         //gPad->SetLogy(1);
-      }
     }
   }
 

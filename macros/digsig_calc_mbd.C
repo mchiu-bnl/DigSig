@@ -114,7 +114,7 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
   //read_tcalib();
 
   TString savefname = rootfname;
-  savefname.ReplaceAll(".root","_times.root");
+  savefname.ReplaceAll(".root","_mbd.root");
   TFile *savefile = new TFile(savefname,"RECREATE");
 
   TString name, leaf;
@@ -300,7 +300,8 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
     {
       int arm = ipmt/64;
 
-      if ( f_q[ipmt] > 20 )
+      //if ( f_q[ipmt] > 20 && f_tq[ipmt] > 0. && f_tq[ipmt] < 35. )
+      if ( f_tq[ipmt] > 0. && f_tq[ipmt] < 35. )
       {
         f_bq[arm] += f_q[ipmt];
         f_bn[arm] += 1;
