@@ -13,15 +13,15 @@
 #include <vector>
 
 #include "get_runstr.h"
+#include "BbcGeom.h"
 
 const int MAXRUNS = 11;
 const int MAXCH = 256;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
-int NUMPMT = 128;                   // number of PMTs
+int NUM_PMT = 128;                   // number of PMTs
 int NCH = MAXCH;                    // total number of channels (including charge channels)
 int NBOARDS;
 
-TH1 *h_ampl[MAXRUNS][MAXCH];    //[run][ch] 
 TF1 *fgaus[MAXRUNS][MAXCH];
 int nrun = 0;
 int run_number[MAXRUNS];
@@ -33,6 +33,7 @@ TH1 *h_qsum[2]; // [arm]
 TH2 *h2_tt[MAXRUNS];     // time in t-ch
 TH2 *h2_tq[MAXRUNS];     // time in q-ch
 TH2 *h2_q[MAXRUNS];      // charge
+TH1 *h_q[MAXRUNS][NUM_PMT];    //[run][ipmt] 
 
 const int verbose = 0;
 
@@ -47,11 +48,11 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   cout << "tfname " << tfname << endl;
 
   // Book Histograms, etc
-  for (int ich=0; ich<NUMPMT; ich++)
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
   {
-    name = "h_bbc"; name += ich; name += "_"; name += nrun;
+    name = "h_bbcq"; name += ipmt; name += "_"; name += nrun;
     title = name;
-    h_ampl[nrun][ich] = new TH1F(name,title,1610,-100,16000);
+    h_q[nrun][ipmt] = new TH1F(name,title,1610,-100,16000);
   }
 
   for (int iarm=0; iarm<2; iarm++)
@@ -62,23 +63,23 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   }
 
   name = "h2_tt"; name += nrun;
-  h2_tt[nrun] = new TH2F(name,name,300,-15.,15.,NUMPMT,-0.5,NUMPMT-0.5);
+  h2_tt[nrun] = new TH2F(name,name,300,-15.,15.,NUM_PMT,-0.5,NUM_PMT-0.5);
   name = "h2_tq"; name += nrun;
-  h2_tq[nrun] = new TH2F(name,name,300,-15.,15.,NUMPMT,-0.5,NUMPMT-0.5);
+  h2_tq[nrun] = new TH2F(name,name,300,-15.,15.,NUM_PMT,-0.5,NUM_PMT-0.5);
   name = "h2_q"; name += nrun;
-  h2_q[nrun] = new TH2F(name,name,4096,-100.,16384.,NUMPMT,-0.5,NUMPMT-0.5);
+  h2_q[nrun] = new TH2F(name,name,4096,-100.,16384.,NUM_PMT,-0.5,NUM_PMT-0.5);
 
   Int_t   f_evt;
-  Float_t f_tt[NUMPMT];  // time from t-channels
-  Float_t f_tq[NUMPMT];  // time from q-channels
-  Float_t f_q[NUMPMT];  // voltage
+  Float_t f_tt[NUM_PMT];  // time from t-channels
+  Float_t f_tq[NUM_PMT];  // time from q-channels
+  Float_t f_q[NUM_PMT];  // voltage
 
   cout << "tfname " << tfname << endl;
 
   TFile *tfile = new TFile(tfname,"READ");
   TTree *tree = (TTree*)tfile->Get("t");
   tree->SetBranchAddress("evt",&f_evt);
-  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
   {
     name = "tt"; name += ipmt;
     tree->SetBranchAddress(name,&f_tt[ipmt]);
@@ -93,7 +94,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   {
     tree->GetEntry(ientry);
 
-    for (int ipmt=0; ipmt<NUMPMT; ipmt++)
+    for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
     {
       int sn = ipmt/64;     // south or north
       int quad = ipmt/32;    // quadrant
@@ -103,9 +104,9 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
       h2_tq[nrun]->Fill( f_tq[ipmt], ipmt );
       h2_q[nrun]->Fill( f_q[ipmt], ipmt );
       
-      h_ampl[nrun][ipmt]->Fill( f_q[ipmt] );
+      h_q[nrun][ipmt]->Fill( f_q[ipmt] );
       if ( f_tt[ipmt]>8 && f_tt[ipmt]<16 ) h_qsum[sn]->Fill( f_q[ipmt] );
-      if ( f_q[ipmt]>200 ) h_ampl[nrun][ipmt]->Fill( f_q[ipmt] );
+      if ( f_q[ipmt]>200 ) h_q[nrun][ipmt]->Fill( f_q[ipmt] );
     }
   }
 
@@ -118,7 +119,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     fgaus[nrun][ich] = new TF1(name,"gaus",-100,16000);
     fgaus[nrun][ich]->SetLineColor(4);
     fgaus[nrun][ich]->SetParameters(1000,10000,10);
-    h_ampl[nrun][ich]->Fit( fgaus[nrun][ich], "NQR" );
+    h_q[nrun][ich]->Fit( fgaus[nrun][ich], "NQR" );
 
     f_peak[ich][nrun] = fgaus[nrun][ich]->GetParameter(1);
     f_peakerr[ich][nrun] = fgaus[nrun][ich]->GetParError(1);
@@ -144,7 +145,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     }
   }
 
-  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
   {
     int sn = ipmt/64;     // south or north
     int quad = ipmt/32;    // quadrant
@@ -152,13 +153,13 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
     if ( verbose )
     {
         c_charge[quad]->cd( ipmt%32 + 1  );
-        h_ampl[nrun][ipmt]->Draw();
-        h_ampl[nrun][ipmt]->Rebin(10);
+        h_q[nrun][ipmt]->Draw();
+        h_q[nrun][ipmt]->Rebin(10);
         gPad->SetLogy(1);
 
         c_time[quad]->cd( ipmt%32 + 1 );
-        h_ampl[nrun][ipmt]->Draw();
-        h_ampl[nrun][ipmt]->Rebin(10);
+        h_q[nrun][ipmt]->Draw();
+        h_q[nrun][ipmt]->Rebin(10);
         //gPad->SetLogy(1);
     }
   }
