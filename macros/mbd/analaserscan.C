@@ -14,7 +14,7 @@
 
 const int MAXRUNS = 100;    // 11 is the typical
 const int MAXCH = 256;
-const int NUMPMT = 128;
+const int NUM_PMT = 128;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
 int NCH;                 // total number of channels (including charge channels)
 int NBOARDS;
@@ -23,10 +23,16 @@ TH1 *h_laseramp[MAXRUNS][MAXCH];    //[run][ch]
 TF1 *fgaus[MAXRUNS][MAXCH];
 int nrun = 0;
 int run_number[MAXRUNS];
-float hvscale[MAXRUNS];
+float hvscale[MAXRUNS];             // Scale from final Au+Au
+float hvset[MAXRUNS];               // HV setting
 float laseramp[MAXCH][MAXRUNS];
 float laseramperr[MAXCH][MAXRUNS];
+float norm_laseramp[MAXCH][MAXRUNS];
+float norm_laseramperr[MAXCH][MAXRUNS];
 TGraphErrors *g_laserscan[MAXCH];
+TGraphErrors *g_norm_laserscan[MAXCH];
+
+TF1 *f_gain[NUM_PMT];
 
 const int verbose = 1;
 
@@ -41,7 +47,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   cout << "tfname " << tfname << endl;
 
   // Book Histograms, etc
-  for (int ich=0; ich<NUMPMT; ich++)
+  for (int ich=0; ich<NUM_PMT; ich++)
   {
     name = "h_laseramp"; name += ich; name += "_"; name += nrun;
     title = name;
@@ -59,7 +65,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   TFile *tfile = new TFile(tfname,"READ");
   TTree *tree = (TTree*)tfile->Get("t");
   tree->SetBranchAddress("evt",&evt);
-  for (int ich=0; ich<NUMPMT; ich++)
+  for (int ich=0; ich<NUM_PMT; ich++)
   {
     name = "tt"; name += ich;
     tree->SetBranchAddress(name,&f_tt[ich]);
@@ -74,7 +80,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   {
     tree->GetEntry(ientry);
 
-    for (int ich=0; ich<NUMPMT; ich++)
+    for (int ich=0; ich<NUM_PMT; ich++)
     {
       //cout << evt << "\t" << t[1] << "\t" << f_q[1] << "\t" << t[14] << "\t" << f_q[14] << endl;
       h_laseramp[nrun][ich]->Fill( f_q[ich] );
@@ -82,7 +88,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   }
 
   // Fit gaussians to get the average amplitude
-  for (int ich=0; ich<NUMPMT; ich++)
+  for (int ich=0; ich<NUM_PMT; ich++)
   {
     //cout << "Fitting ch " << ich << endl;
     name = "fgaus"; name += ich; name += "_"; name += nrun;
@@ -114,7 +120,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
       c_laseramp[icv]->Divide(8,4);
     }
 
-    for (int ipmt=0; ipmt<NUMPMT; ipmt++)
+    for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
     {
       int quad = ipmt/32;    // quadrant
       c_laseramp[quad]->cd( ipmt%32 + 1 );
@@ -131,7 +137,7 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
 
 }
 
-float prev_ampl[NUMPMT];
+float prev_ampl[NUM_PMT];
 
 void get_prev_gains(const char *prev_gains_file = "gains_at_9_zerofield.out")
 {
@@ -180,7 +186,7 @@ void analaserscan(const char *fname = "hvscan.62880")
     cout << run_number[nruns] << "\t" << hvscale[nruns] << endl;
 
     // get name of root file
-    rootfname.Form( "calib_mbd-%08d-0000_times.root", run_number[nruns] );
+    rootfname.Form( "calib_mbd-%08d-0000_mbd.root", run_number[nruns] );
     cout << "Processing " << rootfname << endl;
 
     anafile( rootfname, nruns );
@@ -201,10 +207,13 @@ void analaserscan(const char *fname = "hvscan.62880")
 
   // Make and draw the gain curves, and
   // write out the HV scale needed to get XX gain
+  name = "mbdlaser_"; name += fname; name += ".root";
+  name.ReplaceAll("hvscan.","");
+  TFile *savefile = new TFile(name,"RECREATE");
   ofstream gainfile("gains.out");
   ofstream gain9file("gains_at_9.out");
   float gain_wanted = 0.55;
-  for (int ipmt=0; ipmt<NUMPMT; ipmt++)
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
   {
     int quad = ipmt/32;  // quadrant
 
@@ -222,11 +231,16 @@ void analaserscan(const char *fname = "hvscan.62880")
     g_laserscan[ipmt]->Draw("acp");
     g_laserscan[ipmt]->GetHistogram()->SetTitleSize(4);
 
+    name = "f_gain"; name += ipmt;
+    f_gain[ipmt] = new TF1(name,"[0]*exp([1]*x)-1",0,1.0);
+    f_gain[ipmt]->SetParameters(1,1);
+    //g_laserscan[ipmt]->Fit( f_gain[ipmt] );
+
     // now step down until we find the gain we want
     double maxgain = g_laserscan[ipmt]->Eval(1.0);
 
-    float gain9 = g_laserscan[ipmt]->Eval(0.9)/maxgain;
-    gain9file << ipmt << "\t" << 0.9 << "\t" << gain9 << "\t" << g_laserscan[ipmt]->Eval(0.9) << endl;
+    double ref_gain = g_laserscan[ipmt]->Eval(0.9)/maxgain;
+    gain9file << ipmt << "\t" << 0.9 << "\t" << ref_gain << "\t" << g_laserscan[ipmt]->Eval(0.9) << endl;
 
     for (double iv=0.5; iv<1.0; iv+=0.001)
     {
@@ -249,5 +263,55 @@ void analaserscan(const char *fname = "hvscan.62880")
   }
 
   gainfile.close();
+
+  // Now create the normalized gain curves
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
+  {
+    double ref_ampl = g_laserscan[ipmt]->Eval(0.9); 
+    for (int irun=0; irun<nruns; irun++)
+    {
+      norm_laseramp[ipmt][irun] = laseramp[ipmt][irun]/ref_ampl;
+      norm_laseramperr[ipmt][irun] = laseramperr[ipmt][irun]/ref_ampl;
+    }
+    name = "g_norm_laserscan"; name += ipmt;
+    title = "ch "; title += ipmt; title += ", norm";
+    g_norm_laserscan[ipmt] = new TGraphErrors(nruns,hvscale,norm_laseramp[ipmt],0,norm_laseramperr[ipmt]);
+    g_norm_laserscan[ipmt]->SetName(name);
+    g_norm_laserscan[ipmt]->SetTitle(title);
+    g_norm_laserscan[ipmt]->SetMarkerStyle(20);
+    g_norm_laserscan[ipmt]->SetMarkerSize(0.5);
+  }
+
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
+  {
+    g_laserscan[ipmt]->Write();
+    g_norm_laserscan[ipmt]->Write();
+  }
+
+  savefile->Write();
+
+  // dump full gainfile
+  ofstream gain2file("gains_full.csv");
+
+  // Header
+  gain2file << "iv,";
+  for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
+  {
+      gain2file << ipmt << ",";
+  }
+  gain2file << endl;
+
+  // Gains
+  for (double iv=1.0; iv>0.5; iv -= 0.05)
+  {
+    gain2file << iv << ",";
+    for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
+    {
+        gain2file << g_norm_laserscan[ipmt]->Eval(iv) << ",";
+    }
+    gain2file << endl;
+  }
+  gain2file.close();
+
 }
 
