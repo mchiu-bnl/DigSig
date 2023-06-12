@@ -25,6 +25,8 @@ TString template_fname = "TEMPLATES/sig_gen0";
 int verbose = 0;
 
 Int_t   f_evt;
+Int_t   f_clock;
+Int_t   f_femclock;
 Short_t f_bn[2];  // number of hit PMTs, [arm]
 Float_t f_bq[2];  // Total charge sum, [arm]
 Float_t f_bt[2];  // Mean Time, [arm]
@@ -41,7 +43,8 @@ int time_method[MAXCH];
 //const int TRIG_SAMP = 14;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 5;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 11;     // use this sample to get the MBD time
-const int TRIG_SAMP = 17;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 17;     // use this sample to get the MBD time
+const int TRIG_SAMP = 12;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 10;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
@@ -120,6 +123,8 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
   TString name, leaf;
   TTree *tree = new TTree("t","DigSig times");
   tree->Branch("evt", &f_evt, "evt/I");
+  tree->Branch("clk", &f_clock, "clk/I");
+  tree->Branch("femclk", &f_femclock, "femclk/I");
   tree->Branch("bns", &f_bn[0], "bns/S");
   tree->Branch("bnn", &f_bn[1], "bnn/S");
   tree->Branch("bqs", &f_bq[0], "bqs/F");

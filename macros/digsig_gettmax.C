@@ -19,9 +19,7 @@ TH2 *h2_trange_raw;   // raw tdc at maxsamp vs ch
 TH2 *h2_trange;       // subtracted tdc at maxsamp vs ch
 TH1 *h_trange[2];     // subtracted tdc at maxsamp, [S/N]
 
-int TRIGSAMP = 11;
-//int TRIGSAMP = 17;
-
+static int TRIG_SAMP = -1;    // trigger sample
 
 int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
 {
@@ -139,9 +137,9 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
 
       if ( tq==0 && ievt>100 )
       { 
-        h2_trange_raw->Fill( ch[ich][TRIGSAMP] , pmtch );
-        float tdc = ch[ich][TRIGSAMP] - ch[ich][0];
-        float adc = ch[ich+8][TRIGSAMP] - ch[ich+8][0];
+        h2_trange_raw->Fill( ch[ich][TRIG_SAMP] , pmtch );
+        float tdc = ch[ich][TRIG_SAMP] - ch[ich][0];
+        float adc = ch[ich+8][TRIG_SAMP] - ch[ich+8][0];
         h2_trange->Fill( tdc , pmtch );
         /*
         if ( tdc>30 && tdc < 1000 )
@@ -157,7 +155,7 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
       TH1 *h_trigsamp = h2_tmax[0]->ProjectionX("h_trigsamp");
       int maxbin = h_trigsamp->GetMaximumBin();
       TRIGSAMP = h_trigsamp->GetBinCenter( maxbin );
-      cout << "TRIGSAMP " << TRIGSAMP << endl;
+      cout << "TRIG_SAMP " << TRIG_SAMP << endl;
     }
 
     evt_processed++;

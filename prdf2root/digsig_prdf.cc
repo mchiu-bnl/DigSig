@@ -28,6 +28,10 @@ TFile *savefile;
 TTree *t;
 Int_t f_run;
 Int_t f_evt;
+Int_t f_clock;
+Int_t f_femclock;
+Int_t prev_clk = -1;
+Int_t prev_femclk = -1;
 Int_t f_ch;
 //UInt_t f_tstamp;
 //Short_t f_spill;
@@ -43,6 +47,8 @@ TString savefname;
 void ResetEvent()
 {
   f_evt = 0;
+  f_clock = 0;
+  f_femclock = 0;
   memset(f_volt,0,sizeof(f_volt));
   memset(f_time,0,sizeof(f_time));
 }
@@ -104,6 +110,8 @@ void SetSaveFileName(const char *fname)
   t = new TTree("t","PRDF Data");
   t->Branch("run",&f_run,"run/I");
   t->Branch("evt",&f_evt,"evt/I");
+  t->Branch("evt",&f_clock,"clk/I");
+  t->Branch("evt",&f_femclock,"femclk/I");
   //t->Branch("tstamp",&f_tstamp,"tstamp/i");
   //t->Branch("spill",&f_spill,"spill/S");
   //t->Branch("spillevt",&f_spillevt,"spillevt/S");
@@ -176,6 +184,42 @@ int process_event(Event * e)
 
     if ( p[ipkt] )
     {
+      // check fem clk vs clk on sphenix digitizer
+      f_clock = p[ipkt]->iValue(0,"CLOCK");
+
+      // get the clocks from the two adc modules
+      int fclk1 = p[ipkt]->iValue(0,"FEMCLOCK");
+      int fclk2 = p[ipkt]->iValue(1,"FEMCLOCK");
+
+      f_femclock = fclk1;   // just pick arbitrarily fem clk1
+
+      if ( fclk1 != fclk2 )
+      {
+        // do a check that the two adc clocks match
+        cout << "ERROR, fclk1 != fclk2, evt " << f_evt << "\t" << fclk1 << "\t" << fclk2 << endl;
+      }
+      else
+      {
+        // do a check that the XMIT clock and ADC clocks count up together
+        static int counter = 0;
+
+        int clkdiff = (f_clock - prev_clk) % 65536;
+        int femclkdiff = (f_femclock - prev_femclk) % 65536;
+
+        if ( clkdiff < 0 ) clkdiff += 65536;
+        if ( femclkdiff < 0 ) femclkdiff += 65536;
+
+        if ( (counter<100) && (clkdiff != femclkdiff) && (prev_clk!=-1) )
+        {
+          cout << "ERROR, clkdiff != femclkdiff, evt " << f_evt << "\t" << fclk1 << "\t" << fclk2
+              << "\t" << clkdiff << "\t" << femclkdiff << endl;
+          counter++;
+        }
+
+        prev_clk = f_clock;
+        prev_femclk = f_femclock;
+      }
+
       for (int ich=0; ich<NCHPERPKT; ich++)
       {
         int feech = ipkt*NCHPERPKT + ich;
