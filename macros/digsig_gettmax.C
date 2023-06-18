@@ -154,7 +154,7 @@ int digsig_gettmax(const char *fname = "dt5742.root", const int max_events = 0)
     {
       TH1 *h_trigsamp = h2_tmax[0]->ProjectionX("h_trigsamp");
       int maxbin = h_trigsamp->GetMaximumBin();
-      TRIGSAMP = h_trigsamp->GetBinCenter( maxbin );
+      TRIG_SAMP = h_trigsamp->GetBinCenter( maxbin );
       cout << "TRIG_SAMP " << TRIG_SAMP << endl;
     }
 
