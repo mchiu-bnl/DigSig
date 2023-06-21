@@ -28,8 +28,8 @@ TFile *savefile;
 TTree *t;
 Int_t f_run;
 Int_t f_evt;
-Int_t f_clock;
-Int_t f_femclock;
+UShort_t f_clock;
+UShort_t f_femclock;
 Int_t prev_clk = -1;
 Int_t prev_femclk = -1;
 Int_t f_ch;
@@ -110,8 +110,8 @@ void SetSaveFileName(const char *fname)
   t = new TTree("t","PRDF Data");
   t->Branch("run",&f_run,"run/I");
   t->Branch("evt",&f_evt,"evt/I");
-  t->Branch("evt",&f_clock,"clk/I");
-  t->Branch("evt",&f_femclock,"femclk/I");
+  t->Branch("clk",&f_clock,"clk/s");
+  t->Branch("femclk",&f_femclock,"femclk/s");
   //t->Branch("tstamp",&f_tstamp,"tstamp/i");
   //t->Branch("spill",&f_spill,"spill/S");
   //t->Branch("spillevt",&f_spillevt,"spillevt/S");
@@ -185,13 +185,13 @@ int process_event(Event * e)
     if ( p[ipkt] )
     {
       // check fem clk vs clk on sphenix digitizer
-      f_clock = p[ipkt]->iValue(0,"CLOCK");
+      f_clock = static_cast<UShort_t>( p[ipkt]->iValue(0,"CLOCK") );
 
       // get the clocks from the two adc modules
       int fclk1 = p[ipkt]->iValue(0,"FEMCLOCK");
       int fclk2 = p[ipkt]->iValue(1,"FEMCLOCK");
 
-      f_femclock = fclk1;   // just pick arbitrarily fem clk1
+      f_femclock = static_cast<UShort_t>( fclk1 );   // just pick arbitrarily fem clk1
 
       if ( fclk1 != fclk2 )
       {
