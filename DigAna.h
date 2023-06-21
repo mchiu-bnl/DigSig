@@ -50,6 +50,8 @@ public:
   void ReadTemplate(const char *basename);
 
   int32_t get_evt() { return f_evt; }
+  UShort_t get_clock() { return f_clock; }
+  UShort_t get_femclock() { return f_femclock; }
   int32_t get_spillevt() { return f_spillevt; }
   int32_t get_dtstamp() { return f_dtstamp; }
 
@@ -65,6 +67,8 @@ private:
   TFile *tfile;
   TTree *ttree;
   Int_t f_evt;
+  UShort_t f_clock;
+  UShort_t f_femclock;
   Int_t f_spillevt;
   Int_t f_dtstamp;
   Float_t f_x[272][1024];  // time or sample

@@ -27,6 +27,8 @@ DigAna::DigAna(const int numch, const int nsamp) :
   }
 
   f_evt = -1;
+  f_clock = 0;
+  f_femclock = 0;
 
   name = "hdTime";
   hdTime = new TH1F(name,name,1000,-0.1,0.1);
@@ -55,6 +57,8 @@ Stat_t DigAna::OpenRootFile(const char *fname)
 
   ttree = (TTree*)tfile->Get("t");
   ttree->SetBranchAddress("evt",&f_evt);
+  ttree->SetBranchAddress("clk",&f_clock);
+  ttree->SetBranchAddress("femclk",&f_femclock);
   //ttree->SetBranchAddress("spillevt",&f_spillevt);
   //ttree->SetBranchAddress("dtstamp",&f_dtstamp);
   TString label;
