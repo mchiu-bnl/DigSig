@@ -8,9 +8,11 @@
 # Check that user specifies a file
 if [[ $# -lt 1 ]]
 then
-    echo "Usage: root2mbd.sh <fname>"
-    exit -1
+  echo "Usage: root2mbd.sh <fname>"
+  exit -1
 fi
+
+env
 
 fname=$1    # DigSig ROOT filename
 
@@ -23,19 +25,25 @@ fi
 
 if echo $1 | grep 'root$'
 then
-    rootf=$fname
-	echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
-	root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
+
+  rootf=$fname
+  echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
+  which root.exe
+  echo PATH=$PATH
+  echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
+  root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
+
 else
 
-    echo "Processing $fname"
-	cat $fname | while read run setting
-	do
-	    rootf=`printf "calib_mbd-%d.root" $run`
-	    echo $run $setting $rootf
-	    echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
-	    root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
-	    #mv prdf.root prdf_${run}.root
-	done
+  echo "Processing $fname"
+  cat $fname | while read run setting
+  do
+    rootf=`printf "calib_mbd-%d.root" $run`
+    echo $run $setting $rootf
+    echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
+    root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
+    #mv prdf.root prdf_${run}.root
+  done
+
 fi
 

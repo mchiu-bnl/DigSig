@@ -45,7 +45,8 @@ int time_method[MAXCH];
 //const int TRIG_SAMP = 11;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 17;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 12;     // use this sample to get the MBD time
-const int TRIG_SAMP = 16;     // use this sample to get the MBD time
+//const int TRIG_SAMP = 16;     // use this sample to get the MBD time
+const int TRIG_SAMP = 18;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 10;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
@@ -84,6 +85,28 @@ void read_tcalib(const char *tcalibfname = "mbd.tcalib")
   }
 }
 
+float gaincorr[NPMT];
+int read_qcalib(const char *caldir = "/sphenix/user/chiu/sphenix_bbc/run2023/results/00020200-0000/")
+{
+  TString gainfname = caldir; gainfname += "bbc_mip.calib";
+  ifstream gainfile( gainfname );
+
+  cout << "Reading gains from " << gainfname << endl;
+  int ch;
+  float integ, integerr;
+  float peak, peakerr;
+  float width, widtherr;
+  float chi2ndf;
+  while ( gainfile >> ch >> integ >> peak >> width >> integerr >> peakerr >> widtherr >> chi2ndf )
+  {
+    gaincorr[ch] = 1.0/peak;
+
+    cout << ch << "\t" << peak << endl;
+  }
+
+  return 1;
+}
+
 void reset_event()
 {
   for (int iarm=0; iarm<2; iarm++)
@@ -116,6 +139,7 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
 
 //chiu SKIP FOR NOW
   //read_tcalib();
+  read_qcalib();
 
   TString savefname = rootfname;
   savefname.ReplaceAll(".root","_mbd.root");
@@ -247,8 +271,11 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
         }
         f_tq[pmtch] = f_tq[pmtch] - (TRIG_SAMP-3);
         f_tq[pmtch] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
-        f_q[pmtch] = sig->GetAmpl();
-        if ( f_q[pmtch]<24 )
+        float ampl = sig->GetAmpl();
+        f_q[pmtch] = ampl*gaincorr[pmtch];
+
+        // mark low amplitude charge signals with bad time
+        if ( ampl<24 )  // about 6 sigma since RMS ADC ~ 4
         {
           f_tq[pmtch] = -9999.;
         }

@@ -18,7 +18,7 @@
 const int MAXRUNS = 11;
 const int MAXCH = 256;
 const int MAXBOARDS = MAXCH/16;     // FEM boards
-int NUM_PMT = 128;                   // number of PMTs
+const int NUM_PMT = 128;                   // number of PMTs
 int NCH = MAXCH;                    // total number of channels (including charge channels)
 int NBOARDS;
 
@@ -201,6 +201,68 @@ void anafile(const char *tfname = "prdf_478_times.root", const int nrun = 0)
   name = dir + "h2_q.png";
   ac[icvs]->SaveAs( name );
   icvs++;
+
+  // Plot the charge at each radii
+  // South
+  std::map<float, int> bbc_r;
+  bbc_r[7.51] = 0;
+  bbc_r[8.52] = 1;
+  bbc_r[9.84] = 2;
+  bbc_r[10.24] = 3;
+  bbc_r[11.36] = 4;
+  bbc_r[12.38] = 5;
+  bbc_r[13.01] = 6;
+
+  int splots[7] = {1,1,1,1,1,1,1};
+
+  ac[icvs] = new TCanvas("c_qbyr_south","south q by radius",1000,1000);
+  ac[icvs]->Divide(4,2);
+  for (int ipmt=0; ipmt<64; ipmt++)
+  {
+    float x = TubeLoc[ipmt][0];
+    float y = TubeLoc[ipmt][1];
+    float r = sqrt(x*x+y*y);
+    r = round( r*100. )/100.;
+    int ir = bbc_r[r];
+    ac[icvs]->cd( ir + 1 );
+    h_q[nrun][ipmt]->SetLineColor( splots[ir] );
+    h_q[nrun][ipmt]->Rebin(10);
+    if ( splots[ir] == 1 )
+      h_q[nrun][ipmt]->Draw();
+    else
+      h_q[nrun][ipmt]->Draw("same");
+    gPad->SetLogy(1);
+    splots[ir]++;
+  }
+  name = dir + "qbyr_south.png";
+  ac[icvs]->SaveAs( name );
+  icvs++;
+
+  int nplots[7] = {1,1,1,1,1,1,1};
+
+  ac[icvs] = new TCanvas("c_qbyr_north","north q by radius",1000,1000);
+  ac[icvs]->Divide(4,2);
+  for (int ipmt=64; ipmt<128; ipmt++)
+  {
+    float x = -TubeLoc[ipmt%64][0];
+    float y = TubeLoc[ipmt%64][1];
+    float r = sqrt(x*x+y*y);
+    r = round( r*100. )/100.;
+    int ir = bbc_r[r];
+    ac[icvs]->cd( ir + 1 );
+    h_q[nrun][ipmt]->SetLineColor( nplots[ir] );
+    h_q[nrun][ipmt]->Rebin(10);
+    if ( nplots[ir] == 1 )
+      h_q[nrun][ipmt]->Draw();
+    else
+      h_q[nrun][ipmt]->Draw("same");
+    gPad->SetLogy(1);
+    nplots[ir]++;
+  }
+  name = dir + "qbyr_north.png";
+  ac[icvs]->SaveAs( name );
+  icvs++;
+
   /*
   ac[icvs] = new TCanvas("ac","ac",800,400);
   h_qsum[0]->Draw();
