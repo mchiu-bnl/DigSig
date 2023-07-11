@@ -184,6 +184,15 @@ int process_event(Event * e)
     p[ipkt] = e->getPacket( pktid );
     //cout << "Found packet " << 2001+ipkt << "\t" << p[ipkt] << endl;
 
+    // Check that packet has good checksums
+    if ( (p[ipkt]->iValue(0,"EVENCHECKSUMOK") == 0) || (p[0]->iValue(0,"ODDCHECKSUMOK") == 0) )
+    {
+      std::cout << "ERROR, evt " << f_evt << ", Packet " << pktid << " has bad checksum" << std::endl;
+
+      flag_err = 1;
+      continue;
+    }
+
     if ( p[ipkt] )
     {
       // check fem clk vs clk on sphenix digitizer
@@ -198,7 +207,7 @@ int process_event(Event * e)
       if ( fclk1 != fclk2 )
       {
         // do a check that the two adc clocks match
-        cout << "ERROR, fclk1 != fclk2, evt " << f_evt << "\t" << fclk1 << "\t" << fclk2 << endl;
+        cout << "ERROR, evt " << f_evt << ", fclk1 != fclk2, " << fclk1 << "\t" << fclk2 << endl;
       }
       else
       {
@@ -213,7 +222,7 @@ int process_event(Event * e)
 
         if ( (counter<100) && (clkdiff != femclkdiff) && (prev_clk!=-1) )
         {
-          cout << "ERROR, clkdiff != femclkdiff, evt " << f_evt << "\t" << fclk1 << "\t" << fclk2
+          cout << "ERROR, evt " << f_evt << ", clkdiff != femclkdiff, " << fclk1 << "\t" << fclk2
               << "\t" << clkdiff << "\t" << femclkdiff << endl;
           counter++;
         }
@@ -255,7 +264,7 @@ int process_event(Event * e)
   }
   else
   {
-    cout << "Skipping t->Fill evt " << f_evt << endl;
+    cout << "Skipping t->Fill(), evt " << f_evt << endl;
   }
 
   // Delete the packets
