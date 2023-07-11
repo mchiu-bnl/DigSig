@@ -164,11 +164,13 @@ int process_event(Event * e)
 
   //== SKIPPING FIRST TWO EVENTS!!!!
   // THIS IS A KLUDGE ONLY FOR THE RCDAQ PROBLEMS
+  /*
   if ( f_evt < 4 )
   {
     cout << "Skipping evt " << f_evt << endl;
     return 0;
   }
+  */
 
   if ( evt_type != 1 ) return 0;
 
