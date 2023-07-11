@@ -28,9 +28,29 @@ then
 
   rootf=$fname
   echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
-  which root.exe
   echo PATH=$PATH
   echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
+
+  # first process up to 250K uncalibrated events
+  uncalib_events=250000
+  if [[ $nevt -ne 0 ]] && [[ $nevt -lt 250000 ]]
+  then
+    uncalib_events=${nevt}
+  fi
+  root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${uncalib_events},0\)
+
+  mbd_rootf=${rootf%.root}_mbd.root
+
+  # now run calibrations
+  tcalib_events=100000
+  if [[ $nevt -ne 0 ]] && [[ $nevt -lt 100000 ]]
+  then
+    tcalib_events=${nevt}
+  fi
+  root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",0,${tcalib_events}\)  # time calibrations
+  root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",1\)         # charge calibrations
+
+  # first process 250K uncalibrated events
   root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
 
 else

@@ -1,4 +1,5 @@
 #include <iostream>
+#include "get_runstr.h"
 
 #if defined(__CLING__)
 R__LOAD_LIBRARY(libdigsig)
@@ -46,7 +47,7 @@ int time_method[MAXCH];
 //const int TRIG_SAMP = 17;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 12;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 16;     // use this sample to get the MBD time
-const int TRIG_SAMP = 18;     // use this sample to get the MBD time
+const int TRIG_SAMP = 12;     // use this sample to get the MBD time
 //const int TRIG_SAMP = 10;     // use this sample to get the MBD time
 
 // 0 = dCFD, 1=template fit, 2=MBD-method
@@ -85,7 +86,31 @@ void read_tcalib(const char *tcalibfname = "mbd.tcalib")
   }
 }
 
-float gaincorr[NPMT];
+// Read in tq t0 offset calibrations
+Float_t tq_t0_offsets[MAXCH];   // converts tdc to time
+void read_tq_t0_calib(const char *caldir = "/sphenix/user/chiu/sphenix_bbc/run2023/results/00020200-0000/")
+{
+  TString tq_t0_fname = caldir; tq_t0_fname += "bbc_tq_t0.calib";
+  ifstream tcalibfile( tq_t0_fname );
+
+  cout << "Reading tq_t0 offset calibrations from " << tq_t0_fname << endl;
+
+  int pmtnum;
+  float meanerr;
+  float sigma;
+  float sigmaerr;
+  for (int ipmt=0; ipmt<NPMT; ipmt++)
+  {
+    tcalibfile >> pmtnum >> tq_t0_offsets[ipmt] >> meanerr >> sigma >> sigmaerr;
+    if ( pmtnum != ipmt )
+    {
+      cerr << "ERROR, pmtnum != ipmt, " << pmtnum << "\t" << ipmt << endl;
+      exit(0);
+    }
+  }
+}
+
+Float_t gaincorr[NPMT];
 int read_qcalib(const char *caldir = "/sphenix/user/chiu/sphenix_bbc/run2023/results/00020200-0000/")
 {
   TString gainfname = caldir; gainfname += "bbc_mip.calib";
@@ -119,7 +144,7 @@ void reset_event()
   }
 }
 
-int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", const int nevents = 0)
+int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", const int nevents = 0, const int apply_calibs = 1)
 {
   gSystem->Load("libdigsig.so");
   //Float_t f_evt;
@@ -137,9 +162,33 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
     cout << "Setting NCH = " << NCH << endl;
   }
 
-//chiu SKIP FOR NOW
-  //read_tcalib();
-  read_qcalib();
+  if ( apply_calibs )
+  {
+    // check for existing calibrations for this run
+    // if exist, use, otherwise use default
+    TString caldir = "results/";
+    caldir += get_runstr(rootfname);
+    caldir += "/";
+    if( gSystem->AccessPathName(caldir + "bbc_tq_t0.calib") )
+    {
+      read_qcalib();
+      read_tq_t0_calib();
+    }
+    else
+    {
+      read_qcalib( caldir );
+      read_tq_t0_calib( caldir );
+    }
+
+    //read_tcalib(); //chiu SKIP FOR NOW
+  }
+  else  // don't apply calibs
+  {
+    // set these so they don't do anything.
+    std::fill_n( gaincorr, NPMT, 1. );
+    std::fill_n( tq_t0_offsets, NPMT, 0. );
+  }
+
 
   TString savefname = rootfname;
   savefname.ReplaceAll(".root","_mbd.root");
@@ -189,7 +238,10 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
   set_time_method();
 
   int nentries = digana.OpenRootFile( rootfname );
-  if ( nevents != 0 ) nentries = nevents;
+  if ( nevents!=0 && nevents<nentries )
+  {
+    nentries = nevents;
+  }
 
   // Set Calibrations
 
@@ -247,10 +299,12 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
         verbose = 1;
       }
 
+      /*
       if ( ievt==4 )
       {
         cout << "ich\t" << ich << "\t" << pmtch << "\t" << verbose << "\t" << time_method[ich] << endl;
       }
+      */
 
       if ( time_method[ich] == 1 ) // Use Template fit to get time
       {
@@ -263,22 +317,27 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
         //Double_t threshold = 4.0*sig->GetPed0RMS();
         //
         Double_t threshold = 0.5;
-        sig->GetSplineAmpl();
+        float ampl = sig->GetSplineAmpl();
+        //cout << "XXX " << pmtch << "\t" << ampl << endl;
         f_tq[pmtch] = sig->dCFD( threshold );
         if ( verbose && ievt < 20 )
         {
           cout << "tq" << pmtch << "(" << ich << ")\t" << f_tq[pmtch] << "\t" << f_q[pmtch] << endl;
         }
-        f_tq[pmtch] = f_tq[pmtch] - (TRIG_SAMP-3);
-        f_tq[pmtch] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
-        float ampl = sig->GetAmpl();
-        f_q[pmtch] = ampl*gaincorr[pmtch];
+        ampl = sig->GetAmpl();
 
         // mark low amplitude charge signals with bad time
         if ( ampl<24 )  // about 6 sigma since RMS ADC ~ 4
         {
           f_tq[pmtch] = -9999.;
         }
+        else
+        {
+          f_tq[pmtch] *= 17.7623;               // convert from sample to ns (1 sample = 1/56.299 MHz)
+          f_tq[pmtch] = f_tq[pmtch] - tq_t0_offsets[pmtch];
+        }
+
+        f_q[pmtch] = ampl*gaincorr[pmtch];
 
         if ( ievt<10 && ich==255)
         {
@@ -328,7 +387,7 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
       {
         verbose = 0;
       }
-    }
+    } // loop over events
 
     // calculate bbc global variables
     for (int ipmt=0; ipmt<NPMT; ipmt++)
@@ -336,7 +395,8 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
       int arm = ipmt/64;
 
       //if ( f_q[ipmt] > 20 && f_tq[ipmt] > 0. && f_tq[ipmt] < 35. )
-      if ( f_tq[ipmt] > 0. && f_tq[ipmt] < 35. )
+      //if ( f_tq[ipmt] > 0. && f_tq[ipmt] < 35. )
+      if ( fabs(f_tq[ipmt]) < 20. )
       {
         f_bq[arm] += f_q[ipmt];
         f_bn[arm] += 1;
@@ -357,7 +417,7 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
       cout << "Event " << ievt << "\n0:\t";
       for (int ipmt=0; ipmt<NPMT; ipmt++)
       {
-        cout << f_tt[ipmt] << "\t";
+        cout << f_tq[ipmt] << "\t";
         if ( ipmt%8 == 7 )
         {
           cout << endl << ipmt << ":\t";

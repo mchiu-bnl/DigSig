@@ -66,12 +66,12 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
 
     name = "h_tq"; name += ipmt;
     title = "tq"; title += ipmt;
-    h_tq[ipmt] = new TH1F(name,title,900,-150,150);
+    h_tq[ipmt] = new TH1F(name,title,7000,-150,31*17.76);
   }
   TH2 *h2_tq = new TH2F("h2_tq","ch vs tq",900,-150,150,NUM_PMT,-0.5,NUM_PMT-0.5);
 
   // Load in calib constants
-  Float_t t0_offsets[NUM_PMT] = {};
+  Float_t tq_t0_offsets[NUM_PMT] = {};
 
   if ( pass==1 )
   {
@@ -83,7 +83,7 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
     float sigmaerr;
     for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
     {
-      calin_t0_file >> pmtnum >> t0_offsets[ipmt] >> meanerr >> sigma >> sigmaerr;
+      calin_t0_file >> pmtnum >> tq_t0_offsets[ipmt] >> meanerr >> sigma >> sigmaerr;
       if ( pmtnum != ipmt )
       {
         cerr << "ERROR, pmtnum != ipmt, " << pmtnum << "\t" << ipmt << endl;
@@ -94,6 +94,10 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
  
   // Event loop, each ientry is one triggered event
   int nentries = tree->GetEntries();
+  if ( nevt!=0 && nevt< nentries )
+  {
+    nentries = nevt;
+  }
   for (int ientry=0; ientry<nentries; ientry++)
   {
     tree->GetEntry(ientry);
@@ -108,7 +112,7 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
 
     for (int ipmt=0; ipmt<NUM_PMT; ipmt++)
     {
-      float tq = f_tq[ipmt] - t0_offsets[ipmt];
+      float tq = f_tq[ipmt] - tq_t0_offsets[ipmt];
 
       h_tq[ipmt]->Fill( tq );
       h2_tq->Fill( tq, ipmt );
