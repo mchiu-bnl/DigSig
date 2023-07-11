@@ -176,6 +176,7 @@ int digsig_calc_mbd(const char *rootfname = "calib_mbd-00008526-0000.root", cons
     }
     else
     {
+      cout << "Reading calibs from " << caldir << endl;
       read_qcalib( caldir );
       read_tq_t0_calib( caldir );
     }

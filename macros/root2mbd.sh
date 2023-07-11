@@ -27,7 +27,6 @@ if echo $1 | grep 'root$'
 then
 
   rootf=$fname
-  echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
   echo PATH=$PATH
   echo LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -37,6 +36,7 @@ then
   then
     uncalib_events=${nevt}
   fi
+  echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${uncalib_events},0\)
   root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${uncalib_events},0\)
 
   mbd_rootf=${rootf%.root}_mbd.root
@@ -47,10 +47,15 @@ then
   then
     tcalib_events=${nevt}
   fi
+
+  echo root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",0,${tcalib_events}\)
   root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",0,${tcalib_events}\)  # time calibrations
+
+  echo root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",1\)
   root.exe -b -q cal_bbc_mip.C\(\"${mbd_rootf}\",1\)         # charge calibrations
 
   # first process 250K uncalibrated events
+  echo root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
   root.exe -b -q digsig_calc_mbd.C\(\"${rootf}\",${nevt}\)
 
 else

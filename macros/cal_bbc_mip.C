@@ -75,7 +75,7 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
 
   if ( pass==1 )
   {
-    name = dir + "bbc_t0.calib";
+    name = dir + "bbc_tq_t0.calib";
     ifstream calin_t0_file( name );
     int pmtnum;
     float meanerr;
@@ -155,7 +155,7 @@ void cal_bbc_mip(const char *tfname = "beam_mbd-00009184-0000_mbd.root", const i
   ofstream cal_t0_file;
   if ( pass==0 ) 
   {
-    name = dir + "bbc_t0.calib";
+    name = dir + "bbc_tq_t0.calib";
     cal_t0_file.open( name );
   }
   TF1 *gaussian = new TF1("gaussian","gaus",-150,150);
