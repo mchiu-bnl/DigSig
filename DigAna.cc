@@ -20,7 +20,7 @@ DigAna::DigAna(const int numch, const int nsamp) :
 
   for (int ich=0; ich<nch; ich++)
   {
-    cout << "Creating digsig " << ich << endl;
+    //cout << "Creating digsig " << ich << endl;
     digsig.push_back( DigSig(ich,nsamples) );
 
     ch_skip.push_back( 0 ); // by default all ch's are good
@@ -230,7 +230,7 @@ int DigAna::ProcessEvent(const int entry)
   for (int ich=0; ich<nch; ich++)
   {
     if ( ch_skip[ich] == 1 ) continue;
-    if ( entry<1 ) cout << "DigSig::SetXY(), ch " << ich << endl;
+    //if ( entry<1 ) cout << "DigSig::SetXY(), ch " << ich << endl;
     digsig[ich].SetXY(f_x[ich],f_y[ich],invert);
   }
 
