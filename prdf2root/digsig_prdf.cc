@@ -184,17 +184,17 @@ int process_event(Event * e)
     p[ipkt] = e->getPacket( pktid );
     //cout << "Found packet " << 2001+ipkt << "\t" << p[ipkt] << endl;
 
-    // Check that packet has good checksums
-    if ( (p[ipkt]->iValue(0,"EVENCHECKSUMOK") == 0) || (p[0]->iValue(0,"ODDCHECKSUMOK") == 0) )
-    {
-      std::cout << "ERROR, evt " << f_evt << ", Packet " << pktid << " has bad checksum" << std::endl;
-
-      flag_err = 1;
-      continue;
-    }
-
     if ( p[ipkt] )
     {
+      // Check that packet has good checksums
+      if ( (p[ipkt]->iValue(0,"EVENCHECKSUMOK") == 0) || (p[0]->iValue(0,"ODDCHECKSUMOK") == 0) )
+      {
+        std::cout << "ERROR, evt " << f_evt << ", Packet " << pktid << " has bad checksum" << std::endl;
+
+        flag_err = 1;
+        continue;
+      }
+
       // check fem clk vs clk on sphenix digitizer
       f_clock = static_cast<UShort_t>( p[ipkt]->iValue(0,"CLOCK") );
 
