@@ -157,7 +157,7 @@ int process_event(Event * e)
   ResetEvent();
 
   f_evt = e->getEvtSequence();
-  if ( (f_evt%100) == 0 )
+  if ( (f_evt%1000) == 0 )
   {
     cout << "Processing event " << f_evt << endl;
   }
