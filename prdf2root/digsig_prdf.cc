@@ -3,7 +3,9 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
+
 #include <pmonitor/pmonitor.h>
+#include <Event/EventTypes.h>
 #include "digsig_prdf.h"
 
 #include <TFile.h>
@@ -142,13 +144,13 @@ int process_event(Event * e)
   int evt_type = e->getEvtType();
 
   // Start run
-  if ( evt_type == 9 )
+  if ( evt_type == BEGRUNEVENT )
   {
     f_run = e->getRunNumber();
     cout << "Found Begin Run Event for Run " << f_run << endl;
     return 0;
   }
-  else if ( evt_type == 12 )
+  else if ( evt_type == ENDRUNEVENT )
   {
     cout << "Found End Run Event" << endl;
     return 0;
@@ -162,19 +164,24 @@ int process_event(Event * e)
     cout << "Processing event " << f_evt << endl;
   }
 
-  //== SKIPPING FIRST TWO EVENTS!!!!
-  // THIS IS A KLUDGE ONLY FOR THE RCDAQ PROBLEMS
-  /*
-  if ( f_evt < 4 )
+  // do check that event numbers are sequential (not skipped)
+  static int prev_evt = -1;
+  if ( prev_evt != -1 && prev_evt != (f_evt-1) )
   {
-    cout << "Skipping evt " << f_evt << endl;
-    return 0;
+    cout << "ERROR, non-sequential event no's (prev and current): " << prev_evt << "\t" << f_evt << endl;
   }
-  */
+  prev_evt = f_evt;
 
-  if ( evt_type != 1 ) return 0;
+  if ( evt_type != 1 ) 
+  {
+    cout << "Skipping event type " << evt_type << endl;
+    return 0;    // skip events that are not data events
+  }
 
   Packet *p[MAX_PACKETS] = {0};
+
+  int evtnr[2] = {-1};        // xmit evt number
+  int fem_evtnr[2][2] = {-1};    // adc evt number
 
   // Get packets
   int flag_err = 0;
@@ -230,6 +237,30 @@ int process_event(Event * e)
         prev_clk = f_clock;
         prev_femclk = f_femclock;
       }
+
+      // Check that 1st data event (evt #2) has the right Evt Nr and FEM Evt nr
+      // and check that fem evt numbers match
+      evtnr[ipkt] = p[ipkt]->iValue(0,"EVTNR"); 
+      for ( int iadc = 0; iadc < p[ipkt]->iValue(0,"NRMODULES"); iadc++ )
+      {
+        fem_evtnr[ipkt][iadc] = p[ipkt]->iValue(iadc,"FEMEVTNR");
+      }
+      if ( f_evt==2 )
+      {
+        if ( evtnr[ipkt] != 0 )
+        {
+          cout << "ERROR, 1st event number != 0, is instead " << evtnr[ipkt] << endl;
+        }
+      }
+      if ( fem_evtnr[ipkt][0] != fem_evtnr[ipkt][1] )
+      {
+        cout << "ERROR, fem evt nr's don't match: " << fem_evtnr[ipkt][0] << "\t" << fem_evtnr[ipkt][1] << endl;
+      }
+      if ( fem_evtnr[ipkt][0] != (evtnr[ipkt]+1) )
+      {
+        cout << "ERROR, fem evt nr's isn't one greater than evt nr: " << fem_evtnr[ipkt][0] << "\t" << evtnr[ipkt] << endl;
+      }
+
 
       for (int ich=0; ich<NCHPERPKT; ich++)
       {
