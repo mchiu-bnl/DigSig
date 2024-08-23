@@ -13,6 +13,7 @@
 #include <TSpectrum.h>
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <limits>
 
@@ -33,6 +34,7 @@ nsamples(nsamp)
 
 //  ch = chnum;
 //  nsamples = nsamp;
+  _type = (ch/8)%2;   // For MBD, 0=time, 1=charge
 
   name = "hrawpulse"; name += ch;
   hRawPulse = new TH1F(name,name,nsamples,-0.5,nsamples-0.5);
@@ -55,12 +57,15 @@ nsamples(nsamp)
   ped0 = 0.;  // ped average
   use_ped0 = 0;
   name = "hPed0_"; name += ch;
-  //hPed0 = new TH1F(name,name,16384,-0.5,16383.5);
-  hPed0 = new TH1F(name,name,1000,1,0); // automatically determine the range
+  hPed0 = new TH1F(name,name,16384,-0.5,16383.5);
+  //hPed0 = new TH1F(name,name,1000,1,0); // automatically determine the range
   minped0samp = -9999;
   maxped0samp = -9999;
   minped0x = 0.;
   maxped0x = 0.;
+  ped_presamp = 0;
+  ped_presamp_nsamps = 0;
+  _gaussian = nullptr;
 
   h2Template = 0;
   h2Residuals = 0;
@@ -82,7 +87,7 @@ nsamples(nsamp)
   f_ampl = 0;
   f_time = 0;
 
-  template_fcn = 0;
+  template_fcn = nullptr;
 }
 
 void  DigSig::SetTemplateSize(const Int_t nptsx, const Int_t nptsy, const Double_t begt, const Double_t endt)
@@ -101,7 +106,7 @@ void  DigSig::SetTemplateSize(const Int_t nptsx, const Int_t nptsy, const Double
   if ( h2Residuals != 0 ) delete h2Residuals;
 
   TString name = "h2Template"; name += ch;
-  h2Template = new TH2F(name,name,template_npointsx,template_begintime-xbinwid/2.,template_endtime+xbinwid/2,
+  h2Template = new TH2F(name,name,template_npointsx,template_begintime-xbinwid/2.,template_endtime-xbinwid/2,
       template_npointsy,-0.1+ybinwid/2.0,1.1+ybinwid/2.0);
  
   name = "h2Residuals"; name += ch;
@@ -143,7 +148,7 @@ void  DigSig::SetTemplateMinMaxFitRange(const Double_t min, const Double_t max)
 }
 
 // This sets y, and x to sample number (starts at 0)
-void DigSig::SetY(const Float_t *y, const int invert)
+int DigSig::SetY(const Float_t *y, const int invert)
 {
   hpulse->Reset();
   f_ampl = -9999.;
@@ -156,7 +161,7 @@ void DigSig::SetY(const Float_t *y, const int invert)
   }
 
   // Apply pedestal
-  if ( use_ped0 != 0 || minped0samp >= 0 || minped0x != maxped0x )
+  if ( use_ped0 != 0 || minped0samp >= 0 || minped0x != maxped0x || ped_presamp!=0 )
   {
     //cout << "sub" << endl;
 
@@ -168,6 +173,10 @@ void DigSig::SetY(const Float_t *y, const int invert)
     {
       CalcEventPed0(minped0x,maxped0x);
     }
+    else if ( ped_presamp != 0 )
+    {
+      CalcEventPed0_PreSamp(ped_presamp,ped_presamp_nsamps);
+    }
 
     for (int isamp=0; isamp<nsamples; isamp++)
     {
@@ -177,14 +186,17 @@ void DigSig::SetY(const Float_t *y, const int invert)
       gSubPulse->SetPointError( isamp, 0., ped0rms );
     }
   }
+
+  return 1;
 }
 
-void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
+int DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
 {
   hRawPulse->Reset();
   hSubPulse->Reset();
   f_ampl = -9999.;
   f_time = -9999.;
+  _status = 0;
 
   //cout << "nsamples " << nsamples << endl;
   //cout << "use_ped0 " << use_ped0 << "\t" << ped0 << endl;
@@ -196,7 +208,7 @@ void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
     gRawPulse->SetPoint( isamp, x[isamp], y[isamp] );
   }
 
-  if ( use_ped0 != 0 || minped0samp >= 0 || minped0x != maxped0x )
+  if ( use_ped0 != 0 || minped0samp >= 0 || minped0x != maxped0x || ped_presamp!=0 )
   {
     if ( minped0samp >= 0 )
     {
@@ -206,20 +218,32 @@ void DigSig::SetXY(const Float_t *x, const Float_t *y, const int invert)
     {
       CalcEventPed0(minped0x,maxped0x);
     }
+    else if ( ped_presamp != 0 )
+    {
+      if ( _type==0 )
+      {
+        CalcEventPed0_PreSamp(3,ped_presamp_nsamps);
+      }
+      else
+      {
+        CalcEventPed0_PreSamp(ped_presamp,ped_presamp_nsamps);
+      }
+    }
 
     for (int isamp=0; isamp<nsamples; isamp++)
     {
-      {
-        //cout << "sub" << endl;
-        // How do we handle data which is not in samples, but is in time,
-        // such as DRS4 data
-        hSubPulse->SetBinContent( isamp+1, invert*(y[isamp]-ped0) );
-        hSubPulse->SetBinError( isamp+1, ped0rms );
-        gSubPulse->SetPoint( isamp, x[isamp], invert*(y[isamp]-ped0) );
-        gSubPulse->SetPointError( isamp, 0., ped0rms );
-      }
+      // How do we handle data which is not in samples, but is in time,
+      // such as DRS4 data
+      hSubPulse->SetBinContent( isamp+1, invert*(y[isamp]-ped0) );
+      hSubPulse->SetBinError( isamp+1, ped0rms );
+      gSubPulse->SetPoint( isamp, x[isamp], invert*(y[isamp]-ped0) );
+      gSubPulse->SetPointError( isamp, 0., ped0rms );
+      //cout << "sub " << x[isamp] << "\t" << invert*(y[isamp]-ped0) << endl;
+      //cout << "sub2 " << invert << "\t" << y[isamp] << "\t" << ped0 << endl;
     }
   }
+
+  return 1;
 }
 
 Double_t DigSig::GetSplineAmpl()
@@ -299,7 +323,7 @@ void DigSig::FillPed0(const Int_t sampmin, const Int_t sampmax)
     ped0 = ped0stats->Mean();
     ped0rms = ped0stats->RMS();
     //cout << "ped0 " << ch << " " << n << "\t" << ped0 << endl;
-    cout << "ped0 " << ch << "\t" << ped0 << endl;
+    //cout << "ped0 " << ch << "\t" << ped0 << endl;
   }
 
 }
@@ -328,6 +352,60 @@ void DigSig::FillPed0(const Double_t begin, const Double_t end)
 
 }
 
+void DigSig::FillPed0PreSamp(const Int_t presample, const Int_t nsamps)
+{
+  Double_t x, y;
+  //Int_t n = gRawPulse->GetN();
+  //Int_t max = gRawPulse->GetHistogram()->GetMaximumBin();
+  Long64_t max = TMath::LocMax(gRawPulse->GetN(),gRawPulse->GetY());
+  Int_t minsamp = max - presample - nsamps + 1;
+  Int_t maxsamp = max - presample;
+  //cout << "CalcEventPed0_PreSamp: " << max << endl;
+
+  if ( minsamp<0 )
+  {
+    minsamp = 0;
+    _status = 1;  // bad pedestal
+  }
+  if ( maxsamp<0 )
+  {
+    maxsamp = 0;
+    _status = 1;
+  }
+
+  for (int isamp=minsamp; isamp<=maxsamp; isamp++)
+  {
+    gRawPulse->GetPoint(isamp,x,y);
+
+    hPed0->Fill(y);
+    ped0stats->Push( y );
+  }
+
+}
+
+void DigSig::FitPed0()
+{
+  if ( _gaussian==nullptr )
+  {
+    double min = hPed0->GetBinLowEdge(1);
+    int nbins = hPed0->GetNbinsX();
+    double max = hPed0->GetBinLowEdge(nbins+1);
+    TString name = "gaussian"; name += ch;
+    _gaussian = new TF1(name,"gaus",min,max);
+  }
+
+  Double_t mean = hPed0->GetBinCenter( hPed0->GetMaximumBin() );
+  Double_t ampl = hPed0->GetBinContent( hPed0->GetMaximumBin() );
+  const double nominal_sigma = 6.0;
+  _gaussian->SetParameters(ampl,mean,nominal_sigma);
+  _gaussian->SetRange(mean-4*nominal_sigma,mean+4*nominal_sigma);
+  cout << _gaussian->GetName() << "\t" << ampl << "\t" << mean << endl;
+
+  hPed0->Fit(_gaussian,"R");
+
+  ped0 = _gaussian->GetParameter(1);
+  ped0rms = _gaussian->GetParameter(2);
+}
 
 void DigSig::SetPed0(const Double_t mean, const Double_t rms)
 {
@@ -357,6 +435,7 @@ void DigSig::CalcEventPed0(const Int_t minpedsamp, const Int_t maxpedsamp)
   // use straight mean for pedestal
   // Could consider using fit to hPed0 to remove outliers
   SetPed0( ped0stats->Mean(), ped0stats->RMS() );
+  //cout << "In CalcEventPed0 " << GetPed0() << endl;
 }
 
 // Get Event by Event Ped0 if requested
@@ -387,6 +466,54 @@ void DigSig::CalcEventPed0(const Double_t minpedx, const Double_t maxpedx)
   //cout << "ped0stats " << mean << "\t" << rms << endl;
 }
 
+// Get Event by Event Ped0, num samples before peak
+// presample is number of samples before peak, nsamps is how many samples
+// before that to add
+void DigSig::CalcEventPed0_PreSamp(const int presample, const int nsamps)
+{
+  hPed0->Reset();
+  ped0stats->Clear();
+
+  Double_t x, y;
+  //Int_t n = gRawPulse->GetN();
+  //Int_t max = gRawPulse->GetHistogram()->GetMaximumBin();
+  Long64_t max = TMath::LocMax(gRawPulse->GetN(),gRawPulse->GetY());
+  Int_t minsamp = max - presample - nsamps + 1;
+  Int_t maxsamp = max - presample;
+  //cout << "CalcEventPed0_PreSamp: " << max << endl;
+
+  if ( minsamp<0 )
+  {
+    minsamp = 0;
+    _status = 1;  // bad pedestal
+  }
+  if ( maxsamp<0 )
+  {
+    maxsamp = 0;
+    _status = 1;
+  }
+
+  for (int isamp=minsamp; isamp<=maxsamp; isamp++)
+  {
+    gRawPulse->GetPoint(isamp,x,y);
+
+    hPed0->Fill(y);
+    ped0stats->Push( y );
+  }
+
+  // use straight mean for pedestal
+  // Could consider using fit to hPed0 to remove outliers
+  Double_t mean = ped0stats->Mean();
+  Double_t rms = ped0stats->RMS();
+  SetPed0( mean, rms );
+  static int counter = 0;
+  if (counter<10)
+  {
+    cout << "CalcEventPed0_PreSamp: ped0stats " << mean << "\t" << rms << endl;
+    counter++;
+  }
+}
+
 Double_t DigSig::LeadingEdge(const Double_t threshold)
 {
   // Find first point above threshold
@@ -408,7 +535,7 @@ Double_t DigSig::LeadingEdge(const Double_t threshold)
       }
     }
   }
-  if ( sample == -1 ) return -9999.;  // no signal above threshold
+  if ( sample < 1 ) return -9999.;  // no signal above threshold
 
   // Linear Interpolation of start time
   Double_t dx = x[sample] - x[sample-1];
@@ -448,7 +575,7 @@ Double_t DigSig::dCFD(const Double_t fraction_threshold)
       }
     }
   }
-  if ( sample == -1 ) return -9999.;  // no signal above threshold
+  if ( sample < 1 ) return -9999.;  // no signal above threshold
 
   // Linear Interpolation of start time
   Double_t dx = x[sample] - x[sample-1];
@@ -457,6 +584,7 @@ Double_t DigSig::dCFD(const Double_t fraction_threshold)
 
   Double_t t0 = x[sample] - dt1*(dx/dy);
 
+  f_time = t0;
   return t0;
 }
 
@@ -466,14 +594,26 @@ Double_t DigSig::MBD(const Int_t max_samp)
   Double_t *y = gSubPulse->GetY();
 
   // SHOULD INCLUDE TIME CALIBRATION HERE
-  Double_t t0 = y[max_samp];
+  f_time = y[max_samp];
 
   // Get max amplitude, and set it if it hasn't already been set
   int n = gSubPulse->GetN();
   Double_t ymax = TMath::MaxElement(n,y);
   if ( f_ampl == -9999. ) f_ampl = ymax;
 
-  return t0;
+  //if ( y[0] > 25 && ch==0 )
+  /*
+  if ( ch==0 )
+  {
+    cout << ch << f_time << "\t" << f_ampl << endl;
+    gSubPulse->Draw("ap");
+    gPad->SetGridy(1);
+    gPad->SetGridx(1);
+    PadUpdate(0);
+  }
+  */
+
+  return f_time;
 }
 
 Double_t DigSig::Integral(const Double_t xmin, const Double_t xmax)
@@ -571,19 +711,23 @@ void DigSig::Print()
   }
 }
 
-void DigSig::PadUpdate()
+void DigSig::PadUpdate(const int interact)
 {
   // Make sure TCanvas is created externally!
   gPad->Modified();
   gPad->Update();
-  cout << ch << " ? ";
-  TString junk;
-  cin >> junk;
 
-  if (junk[0] == 'w' || junk[0] == 's')
+  if ( interact )
   {
-    TString name = "ch"; name += ch; name += ".png";
-    gPad->SaveAs( name );
+    cout << ch << " ? ";
+    TString junk;
+    cin >> junk;
+
+    if (junk[0] == 'w' || junk[0] == 's')
+    {
+      TString name = "ch"; name += ch; name += ".png";
+      gPad->SaveAs( name );
+    }
   }
 }
 
@@ -659,6 +803,12 @@ Double_t DigSig::TemplateFcn(Double_t *x, Double_t *par)
       f = par[0]*(y0+((y1-y0)/(x1-x0))*(xx-x0));  // linear interpolation
     }
 
+  // reject points with very bad rms in shape
+  if ( template_yrms[ilow]>=1.0 || template_yrms[ihigh]>=1.0 )
+  {
+    TF1::RejectPoint();
+  }
+
   return f;
 }
 
@@ -666,6 +816,14 @@ int DigSig::FitTemplate()
 {
   int verbose = 0;
   //verbose = 100;	// uncomment to see fits
+  float dcfd_time = -99999.;
+  //if ( ch==41 ) cout << "ZZZ " << f_ampl << endl;
+  if ( f_ampl>25 )
+  {
+    dcfd_time = f_time;
+    //cout << "SETTING dcfd_time " << dcfd_time << endl;
+  }
+
   if ( verbose>0 ) cout << "Fitting ch " << ch << endl;
  
   /*
@@ -709,10 +867,10 @@ int DigSig::FitTemplate()
   Double_t x_at_max, ymax;
   LocMax(x_at_max, ymax);
 
-  template_fcn->SetParameters(ymax, x_at_max);
+  template_fcn->SetParameters(ymax, x_at_max-2);
 
   //template_fcn->SetParLimits(1,-5.,4.);
-  template_fcn->SetRange(template_min_xrange,template_max_xrange);
+  //template_fcn->SetRange(template_min_xrange,template_max_xrange);
   if ( verbose==0 ) gSubPulse->Fit(template_fcn,"RNQ");
   else              gSubPulse->Fit(template_fcn,"R");
 
@@ -720,13 +878,23 @@ int DigSig::FitTemplate()
   f_ampl = template_fcn->GetParameter(0);
   f_time = template_fcn->GetParameter(1);
 
+  //if ( ch==41 && fabs(f_ampl) > 0. )
   if ( verbose>0 && fabs(f_ampl) > 0. )
   {
-    cout << "FitTemplate " << f_ampl << "\t" << f_time << endl;
+    cout << "FitTemplate " << f_ampl << "\t" << f_time << "\t" << dcfd_time << endl;
     gSubPulse->Draw("ap");
     template_fcn->SetLineColor(4);
     template_fcn->Draw("same");
-    PadUpdate();
+    PadUpdate(0);
+
+    if ( dcfd_time>-1000 && fabs(dcfd_time - f_time)>0.1 )
+    {
+      std::cout << "dcfd " << dcfd_time << endl;
+      string junk;
+      cout << "? ";
+      cin >> junk;
+    }
+
   }
 
   /*
@@ -760,6 +928,9 @@ int DigSig::FillSplineTemplate()
 
   Double_t max = TMath::MaxElement(gSubPulse->GetN(),gSubPulse->GetY());
 
+  // skip if the waveform is marked as bad
+  if ( _status != 0 ) return 0;
+
   if ( max < template_min_good_amplitude ) return 0;
 
   if ( verbose ) gSubPulse->Draw("ap");
@@ -789,7 +960,6 @@ int DigSig::FillSplineTemplate()
     gSubPulse->Draw("p");
     PadUpdate();
   }
-
 
   // Now go back to find the time by finding x at midpoint of rise
   for (double ix=0; ix<nsamples; ix += step_size)
@@ -849,12 +1019,13 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
  
   TString name = h2Template->GetName(); name += "_py";
   TH1 *hprojy = h2Template->ProjectionY(name,1,1,"e");
-  TF1 *gaus = new TF1("gaussian","gaus",template_begintime,template_endtime);
-  gaus->SetLineColor(2);
+  TF1 *gaussian = new TF1("gaussian","gaus",-0.1,1.05);
+  gaussian->SetLineColor(2);
 
   if ( verbose )
   {
     h2Template->Draw("colz");
+    gPad->SetLogz(1);
     //TH2 *h = h2Template->Projection(1,0);
     //h->Draw("colz");
     PadUpdate();
@@ -864,10 +1035,15 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
   TString fitarg = "R";
   if ( verbose==0 ) fitarg += "NQ";
 
+  name = h2Template->GetName(); name += "_px";
+  TH1 *hprojx = h2Template->ProjectionX(name);
+  int prebin = hprojx->FindBin(-1.2);  // bin just before rising
+  int postbin = hprojx->FindBin(5.0);  // bin after larger fluctuations in signal shape
   for (int ibin=0; ibin<template_npointsx; ibin++)
   {
+    name = h2Template->GetName(); name += "_py"; name += ibin;
     hprojy = h2Template->ProjectionY(name,ibin+1,ibin+1,"e");
-   
+
     //h2Template->GetAxis(0)->SetRange(ibin+1,ibin+1);
     //TH1 *hprojy = h2Template->Projection(1,"e");
     //hprojy->Sumw2();
@@ -887,38 +1063,114 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
     Double_t mean = hprojy->GetBinCenter( hprojy->GetMaximumBin() );
     Double_t rms = hprojy->GetRMS();
     //cout << ch << "\t" << ibin << "\t" << peak << "\t" << mean << endl;
-    //gaus->SetParameters(peak,mean,0.01);
-    gaus->SetParameters(peak,mean,rms);
+    gaussian->Clear();
+    //gaussian->SetParameters(peak,mean,0.01);
+    gaussian->SetParameters(peak,mean,rms);
+    gaussian->SetRange(mean-0.05,mean+0.05);
 
-    if ( ncounts>=10 ) hprojy->Fit(gaus,fitarg);
+    if ( ncounts>=10 ) hprojy->Fit(gaussian,fitarg);
 
-    // See the fits
-    if ( verbose )
-    {
-      hprojy->Draw();
-      PadUpdate();
-    }
+    // Decide whether to use the gaussian fit or hist mean or peak
+    //template_y[ibin] = mean;
+    template_y[ibin] = gaussian->GetParameter(1);
+    //template_yrms[ibin] = gaussian->GetParameter(2);
 
-    /*
-    template_y[ibin] = gaus->GetParameter(1);
-    template_yrms[ibin] = gaus->GetParameter(2);
-    */
-
-    template_y[ibin] = hprojy->GetMean();
+    //template_y[ibin] = hprojy->GetMean();
     template_yrms[ibin] = hprojy->GetRMS();
 
+    // Force baseline to 0
+    //if ( fabs(template_y[ibin]) < 1e-6 )
+    if ( ibin < prebin )
+    {
+      template_y[ibin] = 0.;
+    }
+
+    // kludge to make error on tail large for run2023 data
+    if ( ibin > postbin )
+    {
+      template_yrms[ibin] = 1.;
+    }
+
+    // Check for anomalies
+    int bad_val = 0;
+    if ( isnan( template_y[ibin] ) )
+    {
+      cout << "nan " << ch << "\t" << ibin << "\t" << template_y[ibin] << endl;
+      bad_val = 1;
+    }
+    if ( template_y[ibin]< -0.05 || template_y[ibin]> 1.03 ) bad_val = 1;
+    if ( ibin>0 && fabs(template_y[ibin] - template_y[ibin-1])>0.3 ) 
+    {
+      cout << "bigjump " << ch << "\t" << ibin << "\t" 
+        << template_y[ibin-1] << "\t" << template_y[ibin] << "\t" 
+        << fabs(template_y[ibin] - template_y[ibin-1]) << endl;
+      bad_val = 1; // big jump
+    }
+    if ( bad_val )
+    {
+      template_yrms[ibin] = 2.;
+    }
+
+    // mark bins with poor statistics for later linear interpolation
+    /*
+    if ( hprojy->Integral()<1.5e5 )
+    {
+      template_y[ibin] = NAN;
+    }
+    */
+
+    // Force peak to be 1.0
+    if ( template_y[ibin]>1.0 ) template_y[ibin] = 1.0;
+
+    if ( bad_val && ch==9 )
+    {
+      // make this interpolate
+      //template_y[ibin] = 0.;
+      template_yrms[ibin] = 1.;
+      cout << "badval " << ch << "\t" << ibin << "\t" << template_y[ibin] << "\t" << peak << "\t" << mean << "\t" << rms << endl;
+      //verbose = 1;
+      if ( verbose )
+      {
+        hprojy->Draw("hist");
+        //gaussian->SetParameters(peak,mean,rms);
+        gaussian->Draw("same");
+        PadUpdate(1);
+      }
+      verbose = 0;
+    }
+
     if ( verbose ) cout << "ibin " << ibin << "\t" << template_y[ibin] << "\t" << template_yrms[ibin] << endl;
-    //delete hprojy;
+
+    delete hprojy;
+  }
+  delete gaussian;
+
+  // Now go through and find all the marked bad 
+  // and do a linear interpolation
+  for (int ibin=0; ibin<template_npointsx; ibin++)
+  {
+    int nbad = 0;
+    while( isnan(template_y[ibin]) )
+    {
+      ibin++;
+      nbad++;
+    }
+    float step = (template_y[ibin] - template_y[ibin-nbad-1])/(nbad+1.0);
+    for (int ibad=1; ibad<=nbad; ibad++)
+    {
+      cout << "interp " << ch << "\t" << ibin-ibad << "\t" <<  template_y[ibin] - ibad*step << endl;
+      template_y[ibin-ibad] = template_y[ibin] - ibad*step;
+    }
 
   }
-  delete hprojy;
-  delete gaus;
 
   /* //thnsparse
   h2Template->GetAxis(0)->SetRange(1,template_npointsx);
   h2Template->Write();
   */
 
+  out << std::setprecision(8);
+  oerr << std::setprecision(8);
   out << ch << "\t" << template_npointsx << "\t" << template_begintime << "\t" << template_endtime << endl;
   oerr << ch << "\t" << template_npointsx << "\t" << template_begintime << "\t" << template_endtime << endl;
   for (int ibin=0; ibin<template_npointsx; ibin++)
@@ -936,10 +1188,24 @@ void DigSig::MakeAndWriteTemplate(ostream& out, ostream& oerr)
 
 }
 
+void  DigSig::SetTemplateHist(TH2 *templat, TH2 *residuals)
+{ 
+  if ( h2Template != nullptr ) delete h2Template;
+  if ( h2Residuals != nullptr ) delete h2Residuals;
+  h2Template = templat;
+  h2Residuals = residuals; 
+}
+
 void DigSig::FillFcnTemplate()
 {
   int verbose = 0;
   //verbose = 100;
+
+  // skip if the waveform is marked as bad
+  if ( _status != 0 ) return;
+
+  Double_t max = TMath::MaxElement(gSubPulse->GetN(),gSubPulse->GetY());
+  if ( max < template_min_good_amplitude ) return;
 
   FitTemplate();
 
@@ -964,7 +1230,6 @@ void DigSig::FillFcnTemplate()
       fillvalues[1] = y/f_ampl; //scaled_ampl
     }
     h2Template->Fill( fillvalues[0], fillvalues[1] );
-    //h2Template->Fill( fillvalues );
   }
 }
 
@@ -972,7 +1237,7 @@ void DigSig::FillFcnTemplate()
 int DigSig::ReadTemplate(ifstream& shapefile, ifstream& sherrfile)
 {
   int verbose = 0;
-  verbose = 100;
+  //verbose = 100;
   Int_t temp_ch = -9999;
   Int_t temp_nsamples;
   Double_t temp_begintime;

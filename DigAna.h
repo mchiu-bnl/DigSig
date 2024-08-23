@@ -1,10 +1,12 @@
 #ifndef __DIGANA_H__
 #define __DIGANA_H__
 
+#include "DigSig.h"
+
 #include <TH1.h>
 #include <TGraphErrors.h>
 #include <stdint.h>
-#include "DigSig.h"
+#include <vector>
 
 class TFile;
 class TTree;
@@ -37,15 +39,18 @@ public:
   /** Set to use event-by-event ped */
   void SetEventPed0Range(const Int_t minsamp, const Int_t maxsamp);
   void SetEventPed0Range(const Double_t minx, const Double_t maxx);
+  void FillPed0PreSamp(const Int_t presample = 6, const Int_t nsamps = 1);
+  void SetEventPed0PreSamp(const Int_t presample, const Int_t nsamps = 1);
 
   void CalcIntegralAroundPeak(const Double_t leftlimit, const Double_t rightlimit);
+  void SetSampMax(const std::vector<int>& v);
 
   void SetTemplateSize(const Int_t nptsx, const Int_t nptsy, const Double_t begt, const Double_t endt);
   void SetTemplateMinMaxGoodADC(const Double_t min, const Double_t max);
   void SetTemplateMinMaxFitRange(const Double_t min, const Double_t max);
   void SetTimeOffset(const Double_t o);
-  void FillSplineTemplate();
-  void FillFcnTemplate();
+  void FillSplineTemplate(const int nevt = 0);
+  void FillFcnTemplate(const int nevt = 0);
   void MakeAndWriteTemplate(const char *savename);
   void ReadTemplate(const char *basename);
 

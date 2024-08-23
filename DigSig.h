@@ -25,8 +25,8 @@ public:
   DigSig(const int chnum = 0, const int nsamp = 0);
   virtual ~DigSig();
 
-  void SetY(const Float_t *y, const int invert = 1);
-  void SetXY(const Float_t *x, const Float_t *y, const int invert = 1);
+  int SetY(const Float_t *y, const int invert = 1);
+  int SetXY(const Float_t *x, const Float_t *y, const int invert = 1);
 
   TH1 *GetHist() { return hpulse; }
   TGraphErrors *GetGraph() { return gpulse; }
@@ -41,9 +41,12 @@ public:
    * */
   void FillPed0(const Int_t minsamp, const Int_t maxsamp);
   void FillPed0(const Double_t minsamp, const Double_t maxsamp);
+  void FillPed0PreSamp(const Int_t presamp, const Int_t nsamps);
 
   Double_t GetPed0() { return ped0; }
   Double_t GetPed0RMS() { return ped0rms; }
+
+  void FitPed0();
 
   /** Set the global pedestal. Once set, it is applied to the data for all events.  */
   void SetPed0(const Double_t mean, const Double_t rms = 0.);
@@ -57,8 +60,13 @@ public:
     minped0x = minx;
     maxped0x = maxx;
   }
+  void SetEventPed0PreSamp(const Int_t presample, const Int_t nsamps = 1) {
+    ped_presamp = presample;
+    ped_presamp_nsamps = nsamps;
+  }
   void CalcEventPed0(const Int_t minsamp, const Int_t maxsamp);
   void CalcEventPed0(const Double_t minx, const Double_t maxx);
+  void CalcEventPed0_PreSamp(const Int_t pre_samp, const Int_t nsamps = 1);
 
   /** Leading Edge Discriminator signal */
   Double_t LeadingEdge(const Double_t threshold);  // Leading Edge Discriminator Time
@@ -94,18 +102,22 @@ public:
   Int_t ReadTemplate(std::ifstream& shapefile, std::ifstream& sherrfile);
   void  SetTemplateMinMaxGoodADC(const Double_t min, const Double_t max); // This is used in making templates only
   void  SetTemplateMinMaxFitRange(const Double_t min, const Double_t max); // This is used in making templates only
+  void  SetTemplateHist(TH2 *templat, TH2 *residuals);
 
   //Double_t FitPulse();
   void     SetTimeOffset(const Double_t o) { f_time_offset = o; }
   Double_t TemplateFcn(Double_t *x, Double_t *par);
   TF1*     GetTemplateFcn() { return template_fcn; }
 
-  void PadUpdate();
+  void SetSampMax(const int s) { _samp_max = s; }  // for MBD
+
+  void PadUpdate(const int interact = 0);
   void Print();
 
 private:
   int ch;
   int nsamples;
+  int _status{0};
 
   /** fit values*/
   // should make an array for the different methods
@@ -133,6 +145,9 @@ private:
   Int_t    maxped0samp;       //! max sample for event-by-event ped, inclusive
   Double_t minped0x;          //! min x for event-by-event ped, inclusive
   Double_t maxped0x;          //! max x for event-by-event ped, inclusive
+  Double_t ped_presamp;       //! presamples for ped calculation
+  Double_t ped_presamp_nsamps; //! num of presamples for ped calculation
+  TF1 *    _gaussian;
 
   /** for time calibration */
   Double_t time_calib;
@@ -154,6 +169,9 @@ private:
   std::vector<Double_t> template_y;
   std::vector<Double_t> template_yrms;
   TF1     *template_fcn;
+
+  Int_t _samp_max {-1};    // for MBD, location of max sample
+  Int_t _type {-1};        // type of channel
 
   ClassDef(DigSig,1)
 };

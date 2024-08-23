@@ -14,9 +14,7 @@ DigAna::DigAna(const int numch, const int nsamp) :
 {
   TString name;
 
-  //nch = numch;
-  //nsamples = nsamp;
-  invert = 1;
+  invert = 1; // 1 = don't invert, -1 = invert
 
   for (int ich=0; ich<nch; ich++)
   {
@@ -62,6 +60,7 @@ Stat_t DigAna::OpenRootFile(const char *fname)
   //ttree->SetBranchAddress("spillevt",&f_spillevt);
   //ttree->SetBranchAddress("dtstamp",&f_dtstamp);
   TString label;
+  cout << "Reading " << nch << " channels" << endl;
   for (int ich=0; ich<nch; ich++)
   {
     label = "t"; label += ich;
@@ -92,6 +91,15 @@ void DigAna::FillPed0(const Double_t xmin, const Double_t xmax)
     digsig[ich].FillPed0(xmin,xmax);
   }
 }
+
+void DigAna::FillPed0PreSamp(const Int_t presample, const Int_t nsamps)
+{
+  for (int ich=0; ich<nch; ich++)
+  {
+    digsig[ich].FillPed0PreSamp(presample,nsamps);
+  }
+}
+
 
 int DigAna::SetPed0FromFile(const char *pedfname)
 {
@@ -141,6 +149,15 @@ void DigAna::SetEventPed0Range(const Double_t xmin, const Double_t xmax)
   {
     if ( ch_skip[ich] == 1 ) continue;
     digsig[ich].SetEventPed0Range(xmin,xmax);
+  }
+}
+
+void DigAna::SetEventPed0PreSamp(const Int_t presamples, const Int_t nsamps)
+{
+  for (int ich=0; ich<nch; ich++)
+  {
+    if ( ch_skip[ich] == 1 ) continue;
+    digsig[ich].SetEventPed0PreSamp(presamples,nsamps);
   }
 }
 
@@ -209,7 +226,7 @@ int DigAna::ProcessEvent(const int entry)
   ttree->GetEntry(entry);
 
   /*
-  cout << "Event " << f_evt << endl;
+  //cout << "Event " << f_evt << endl;
   for (int ich=0; ich<nch; ich++)
   {
     cout << ich << ":\t";
@@ -226,7 +243,7 @@ int DigAna::ProcessEvent(const int entry)
     cout << endl;
   }
   */
-
+  
   for (int ich=0; ich<nch; ich++)
   {
     if ( ch_skip[ich] == 1 ) continue;
@@ -247,10 +264,14 @@ void  DigAna::SetTemplateSize(const Int_t nptsx, const Int_t nptsy, const Double
 }
 
 // Be sure to call OpenRootFile first
-void DigAna::FillSplineTemplate()
+void DigAna::FillSplineTemplate(const int nevt)
 {
   //cout << "In DigAna::FillSplineTemplate " << endl;
   Int_t nentries = ttree->GetEntries();
+  if ( nevt!=0 )
+  {
+    nentries = nevt;
+  }
 
   for (int ievt=0; ievt<nentries; ievt++)
   {
@@ -268,9 +289,13 @@ void DigAna::FillSplineTemplate()
 
 // Be sure to call OpenRootFile first
 // and to read in a template
-void DigAna::FillFcnTemplate()
+void DigAna::FillFcnTemplate(const int nevt)
 {
   Int_t nentries = ttree->GetEntries();
+  if ( nevt!=0 )
+  {
+    nentries = nevt;
+  }
 
   Double_t *time = new Double_t[nch];
 
@@ -325,11 +350,21 @@ void DigAna::ReadTemplate(const char *savedname)
 
   for (int ich=0; ich<nch; ich++)
   {
+    if ( ch_skip[ich] == 1 ) continue;
     cout << "Reading Template " << ich << endl;
     digsig[ich].ReadTemplate( shapefile, sherrfile );
   }
 
   shapefile.close();
   sherrfile.close();
+}
+
+void  DigAna::SetSampMax(const std::vector<int>& smax)
+{
+  for (int ich=0; ich<nch; ich++)
+  {
+    if ( ch_skip[ich] == 1 ) continue;
+    digsig[ich].SetSampMax( smax[ich] );
+  }
 }
 
